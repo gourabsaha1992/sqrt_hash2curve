@@ -33,6 +33,8 @@
  * have been added, along with an alternative parametrization for BLS24-509
  * and BLS48-575. Isogeny maps for curves other than BLS12-381 have also
  * been added.
+ * These modifications are distributed under the same license terms
+ * as the original RELIC project.
  */
 
 #include "relic_core.h"
