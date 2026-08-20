@@ -28,6 +28,14 @@
  *
  * @ingroup fp
  */
+/* In the updated version of Relic, the parameters for STARK curve, BLS24-559 and BLS48-571
+ * have been added, along with an alternative parametrization for BLS24-509
+ * and BLS48-575.
+ * These modifications are distributed under the same license terms
+ * as the original RELIC project.
+ */
+
+
 
 #include "relic_core.h"
 #include "relic_fpx.h"
