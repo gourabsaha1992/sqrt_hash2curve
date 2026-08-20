@@ -23,7 +23,7 @@ Square root computation is one of the primary bottlenecks in hash-to-curve const
 - **TSS** — proposed by Sarkar
 - **TSP** — proposed by Pornin
 
-These are implemented and benchmarked for the **BLS12-377**, **BLS24-509-SNARK**, **NIST P-224**, and **STARK** prime fields. Our improved variant of TSB is referred to as **TSB-SK**.
+These are implemented and benchmarked for the **BLS12-377**, **BLS24-509-SNARK**, **NIST P-224**, and **STARK** prime fields. Our improved variant of TSB is referred to as **TSB-SK**. In addition, support for the STARK prime field and the corresponding STARK curve is included in RELIC-updated.
 
 ## Acknowledgments
 
