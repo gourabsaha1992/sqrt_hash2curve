@@ -29,7 +29,7 @@
  * @ingroup ep
  */
 
-/* In the updated version of Relic, the parameters for BLS24-559 and BLS48-571
+/* In the updated version of Relic, the parameters for STARK curve, BLS24-559 and BLS48-571
  * have been added, along with an alternative parametrization for BLS24-509
  * and BLS48-575. Isogeny maps for curves other than BLS12-381 have also
  * been added.
