@@ -8,20 +8,7 @@
 #include <relic/relic_core.h>
 #include "relic/relic_md.h"
 
-/* =========================================================================
- * Square root in GF(p),  n=46, w=2
- *
- * Translated from the Sage reference (do_hlp=False throughout):
- *   - Two leaf sizes: i=44 lb=2 shift=0 ; i=45 lb=1 shift=1
- *   - Repeated primitive: DLP@43 (i=43, lb=3, a=1, b=2)
- *   - Total cost: 128 S, 74 M
- *
- * Lookup table rll[]: 2^w = 4 entries  (g^(v * 2^(n-w)))
- * Lookup table fll[]: 4 entries         (h1^(-v))  where h1 = sqrt(h)
- * gw[rows][4]: rows = ceil(46/2) = 23  (g^(j * 2^(i*w)))
- * gpp[46]:     gpp[i] = g^(2^i)
- * ========================================================================= */
-  /* ── declare all temporaries ─────────────────────────────────────── */
+
     fp_t h0_A;
     fp_t h0_23, h0_35, h0_41, h1, u2_41;
     fp_t h0_t, u2_t;
@@ -111,34 +98,7 @@ static void SELECT(fp_t a0, fp_t a1, bool ctl, fp_t out)
     else     fp_copy(out, a0);
 }
 
-/* =========================================================================
- * GPOW — generalised power from the precomputed gw table.
- *
- * Sage reference:
- *   def GPOW(i, e, elen):
- *       e  &= (1 << elen) - 1
- *       wm  = (1 << w) - 1          # 0x3
- *       ri  = i % w
- *       i   = i // w
- *       if ri != 0:
- *           e <<= ri ; elen += ri
- *       t = gw[i][e & wm]
- *       while True:
- *           elen -= w
- *           if elen <= 0: break
- *           e >>= w ; i += 1
- *           t *= gw[i][e & wm]   # 1 M per extra row
- *       return t
- *
- * Each specialised inline below encodes (i, elen) statically so the
- * compiler sees constants and can eliminate branches entirely.
- * ========================================================================= */
 
-/* GPOW(41, e, 2): ri=41%2=1, e<<=1, i=41//2=20, eff_len=3 → 2 rows: gw[20],gw[21]  0 extra M
- *   After shift: e occupies bits [0..2], masked to 2 bits per row.
- *   Row 20 consumes bits [0..1]; elen becomes 3-2=1 ≤ 0  → done. (only 1 row needed)
- *   Wait: elen after += ri  is 2+1=3;  first row consumes w=2 → elen=1 > 0 → need row 21.
- *   Row 21 consumes bits [2..3]; elen=1-2=-1 ≤ 0 → done.   Total: 1 M. */
 static void GPOW_i41_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 2) - 1;   /* mask to elen bits */
@@ -252,13 +212,7 @@ static void GPOW_i0_e22(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[10][e & 0x3]);             /* 10 M */
 }
 
-/* =========================================================================
- * lookup_rll: find v such that rll[v] == x, return v  (brute-force, 4 entries)
- *
- * Sage: for _ii in range(2^w): if rll[_ii] == x: _tmp = _ii
- *       c = _tmp >> shift
- * We inline the shift into the callers.
- * ========================================================================= */
+
 static uint64_t lookup_rll(fp_t x, fp_t rll[we])
 {
     int v;
@@ -269,13 +223,7 @@ static uint64_t lookup_rll(fp_t x, fp_t rll[we])
     return 0;
 }
 
-/* =========================================================================
- * precomputation
- *   rll[v] = h^v            h = g^(2^(n-w)) = g^(2^44)
- *   fll[v] = h1^(-v)        h1 = sqrt(h)
- *   gw[i][j] = g^(j * 2^(i*w))
- *   gpp[i] = g^(2^i)        (gpp[0]=g, gpp[i]=gpp[i-1]^2)
- * ========================================================================= */
+
 void precomputation(fp_t g, fp_t h, fp_t hh,
                     fp_t rll[we], fp_t fll[we],
                     fp_t gw[nw][we], fp_t gpp[n])
@@ -290,9 +238,7 @@ void precomputation(fp_t g, fp_t h, fp_t hh,
         bn_set_dig(temp, v);
         fp_exp(rll[v], h, temp);
     }
-    /* fll[v] = hh^v  where hh = (sqrt(h))^{-1}
-     * Sage: h1 = sqrt(h); fll[v] = h1^(-v)
-     * We pass hh = h1^{-1} already computed in main. */
+    
     for (int v = 0; v < we; v++) {
         bn_set_dig(temp, v);
         fp_exp(fll[v], hh, temp);
@@ -314,13 +260,7 @@ void precomputation(fp_t g, fp_t h, fp_t hh,
     bn_free(one);
 }
 
-/* =========================================================================
- * DLPpow2ext — fully inlined flat implementation  (w=2, do_hlp=False)
- *
- * Mirrors the Sage function exactly:
- *   returns (e_final, t_A)  →  here we write t_A into out_t.
- *   e_final is not needed by the caller (only t_A is used in sqrt_ext).
- * ========================================================================= */
+
 void DLPpow2ext(fp_t u_A, fp_t out_t,
                 fp_t rll[we], fp_t fll[we],
                 fp_t gw[nw][we], fp_t gpp[n], int rlll[4])
@@ -330,35 +270,33 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_copy(h0_A, u_A);
     for (int _j = 0; _j < 23; _j++) fp_sqr(h0_A, h0_A);
 
-    /* =====================================================================
-     * DLP@23: Square 12 → h0_23 = h0_A^(2^12)
-     * ===================================================================== */
+    
     fp_copy(h0_23, h0_A);
     for (int _j = 0; _j < 12; _j++) fp_sqr(h0_23, h0_23);
 
-    /* ── DLP@35 [H-child of DLP@23]: Square 6 ─────────────────────────── */
+    
     fp_copy(h0_35, h0_23);
     for (int _j = 0; _j < 6; _j++) fp_sqr(h0_35, h0_35);
 
-    /* ── DLP@41 [H-child of DLP@35]: Square 3 ─────────────────────────── */
+    
     fp_copy(h0_41, h0_35);
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_41, h0_41);
 
-    /* leaf-H: i=44, lb=2, shift=0  →  c_41H = lookup(h0_41) >> 0 */
+    
     fp_prime_back(tmp_bn, h0_41);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     c_41H=rlll[d];
-    /* GPOW(41, 2^2 - c_41H, 2) */
+    
     GPOW_i41_e2(h1, (one_k << 2) - c_41H, gw);
     SELECT(h1, gpp[43], c_41H == 0, h1);
     fp_mul(u2_41, h0_35, h1);   /* 1 M */
 
-    /* ── DLP@43 [L-child of DLP@41]: Square 2 ─────────────────────────── */
+    
     fp_copy(h0_t, u2_41);
     for (int _j = 0; _j < 2; _j++) fp_sqr(h0_t, h0_t);
 
-    /* leaf-H: i=45, lb=1, shift=1  →  c_t = lookup(h0_t) >> 1 */
+    
     fp_prime_back(tmp_bn, h0_t);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
@@ -367,20 +305,20 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     SELECT(h1, gpp[44], c_t == 0, h1);
     fp_mul(u2_t, u2_41, h1);    /* 1 M */
 
-    /* leaf-L: i=44, lb=2, shift=0 */
+    
     c_41L = c_t + (((lookup_rll(u2_t, rll) - 1) & 0x3ULL) << 1);   /* 3-bit */
     c_35H = c_41H + (((c_41L - 1) & 0x7ULL) << 2);                  /* 5-bit */
 
-    /* DLP@35 correction → u2_35 */
+    
     GPOW_i35_e5(h1, (one_k << 5) - c_35H, gw);
     SELECT(h1, gpp[40], c_35H == 0, h1);
     fp_mul(u2_35, h0_23, h1);   /* 1 M */
 
-    /* ── DLP@40 [L-child of DLP@35]: Square 3 ─────────────────────────── */
+    
     fp_copy(h0_40, u2_35);
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_40, h0_40);
 
-    /* ── DLP@43 [H-child of DLP@40] ───────────────────────────────────── */
+    
     fp_copy(h0_t, h0_40);
     for (int _j = 0; _j < 2; _j++) fp_sqr(h0_t, h0_t);
     fp_prime_back(tmp_bn, h0_t);
@@ -641,9 +579,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_sqr(f_X34_sq, f_X34);
     fp_mul(u_X2, u_X1, f_X34_sq);   /* 1 M */
 
-    /* =====================================================================
-     * EXT2@40: Square 3 → h0_X40
-     * ===================================================================== */
+    
     fp_copy(h0_X40, u_X2);
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_X40, h0_X40);
 
@@ -668,9 +604,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_sqr(f_X40_sq, f_X40);
     fp_mul(u_X3, u_X2, f_X40_sq);   /* 1 M */
 
-    /* =====================================================================
-     * EXT2@43: Square 2 → h0_X43
-     * ===================================================================== */
+    
     fp_copy(h0_X43, u_X3);
     for (int _j = 0; _j < 2; _j++) fp_sqr(h0_X43, h0_X43);
 
@@ -686,10 +620,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_sqr(f_X43_sq, f_X43);
     fp_mul(u_X4, u_X3, f_X43_sq);   /* 1 M */
 
-    /* =====================================================================
-     * EXT2 BASE: i=44, lb=2, shift=0
-     * c1_base = lookup(u_X4) >> 0 ; d1_base = fll[c1_base]
-     * ===================================================================== */
+    
      fp_prime_back(tmp_bn, u_X4);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
@@ -772,15 +703,13 @@ int main(void)
         bn_read_str(tmp, "5", 1, 16);
         fp_prime_conv(z, tmp);
 
-        /* m = (p-1) / 2^46
-         * p = 0x01ae3a4617c510eac63b05c06ca1493b1a22d9f300f5138f1ef3622fba094800170b5d44300000008508c00000000001
-         * m = (p-1) >> 46  */
+        
         bn_read_str(m,
             "6b8e9185f1443ab18ec1701b28524ec688b67cc03d44e3c7bcd88bee82520005c2d7510c00000021423",
             84, 16);
-        fp_exp(g, z, m);        /* g = z^m  (2^46-th root of unity) */
+        fp_exp(g, z, m);        
 
-        /* e_exp = (m-1)/2  for the initial v = x^((m-1)/2) in sqrt_ext */
+        
         bn_read_str(e,
             "35c748c2f8a21d58c760b80d94292763445b3e601ea271e3de6c45f741290002e16ba88600000010a11",
             83, 16);
@@ -808,7 +737,7 @@ int main(void)
         printf("RDTSC_clk_median = %f\n", RDTSC_clk_median);
         printf("RDTSC_clk_max    = %f\n", RDTSC_clk_max);
 
-        /* correctness check */
+        
         fp_t y2; fp_null(y2); fp_new(y2);
         
         fp_free(y2);
