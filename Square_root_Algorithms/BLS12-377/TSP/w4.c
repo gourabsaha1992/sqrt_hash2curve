@@ -403,18 +403,18 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_PALH, h0_PALH);
     //countS += 3;
 
-    /* PALH.H leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, h0_PALH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
     uint64_t c_PALH = (uint64_t)tab2[d] >> 1;
 
-    /* PALH correction ret_d=F: GPOW(40,2^3-c,3) [0M] */
+    
     GPOW_i40_e3(h1_PALH, (one_k << 3) - c_PALH, gw);
     SELECT(h1_PALH, gpp[43], c_PALH == 0, h1_PALH);
     fp_mul(u2_PALH, h0_PAL, h1_PALH); //countM++;
 
-    /* PALH.L leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, u2_PALH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
@@ -422,7 +422,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     uint64_t e_PALH   = (e1_PALH - 1) & 7ULL;
     uint64_t c_PAL_val = c_PALH + (e_PALH << 3);   /* 6-bit */
 
-    /* PAL correction ret_d=T: GPOW(33,2^6-c,6) [1M] */
+    
     GPOW_i33_e6(f_PAL, (one_k << 6) - c_PAL_val, gw);
     SELECT(f_PAL, gpp[39], c_PAL_val == 0, f_PAL); //countM++;
     fp_sqr(h1_PAL, f_PAL); fp_mul(h1_PAL, h1_PAL, u2_PA); //countS++;
@@ -432,18 +432,18 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_PALL, h0_PALL);
     //countS += 3;
 
-    /* PALL.H leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, h0_PALL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
     uint64_t c_PALL = (uint64_t)tab2[d] >> 1;
 
-    /* PALL correction ret_d=T: GPOW(39,2^3-c,3) [1M] */
+    
     GPOW_i39_e3(f_PALL, (one_k << 3) - c_PALL, gw);
     SELECT(f_PALL, gpp[42], c_PALL == 0, f_PALL); //countM++;
     fp_sqr(u2_PALL, f_PALL); fp_mul(u2_PALL, u2_PALL, h1_PAL); //countS++;
 
-    /* PALL.L leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, u2_PALL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
@@ -456,11 +456,11 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
 
     fp_mul(d_PAL, d_PALL, f_PAL); //countM++;
 
-    /* Combine PAL -> e1_PA_node (12-bit) */
+    
     uint64_t e_PAL_adj   = (e1_PAL_node - 1) & 63ULL;
     uint64_t e1_PA_node  = c_PAL_val + (e_PAL_adj << 6);
 
-    /* Combine PA -> e0_A (23-bit) */
+    
     uint64_t e_PA_adj = (e1_PA_node - 1) & 4095ULL;
     uint64_t e0_A     = c_PA + (e_PA_adj << 11);
 
@@ -490,18 +490,18 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_XHH, h0_XHH);
     //countS += 3;
 
-    /* XHH.H leaf: i=44, lb=2, shift=2 */
+    
     fp_prime_back(tmp_bn, h0_XHH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
     uint64_t c_XHH = (uint64_t)tab2[d] >> 2;
 
-    /* XHH correction ret_d=F: GPOW(41,2^2-c,2) [0M] */
+    
     GPOW_i41_e2(h1_XHH, (one_k << 2) - c_XHH, gw);
     SELECT(h1_XHH, gpp[43], c_XHH == 0, h1_XHH);
     fp_mul(u2_XHH, h0_XH, h1_XHH); //countM++;
 
-    /* XHH.L leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, u2_XHH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
@@ -521,18 +521,18 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     
     fp_copy(h0_XHL, hlp_XH);
 
-    /* XHL.H leaf: i=43, lb=3, shift=1 */
+   
     fp_prime_back(tmp_bn, h0_XHL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
     uint64_t c_XHL = (uint64_t)tab2[d] >> 1;
 
-    /* XHL correction ret_d=T: GPOW(39,2^3-c,3) [1M] */
+    
     GPOW_i39_e3(f_XHL, (one_k << 3) - c_XHL, gw);
     SELECT(f_XHL, gpp[42], c_XHL == 0, f_XHL); //countM++;
     fp_sqr(u2_XHL, f_XHL); fp_mul(u2_XHL, u2_XHL, u2_XH); //countS++;
 
-    /* XHL.L leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, u2_XHL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
@@ -543,20 +543,16 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     uint64_t e_XHL      = (e1_XHL - 1) & 7ULL;
     uint64_t e1_XH_node = c_XHL + (e_XHL << 3);   /* 6-bit */
 
-    /* Combine XH -> c_X (11-bit) */
+    
     uint64_t e_XH_adj = (e1_XH_node - 1) & 63ULL;
     uint64_t c_X      = c_XH_val + (e_XH_adj << 5);
 
-    /* =========================================================================
-     * EXT correction (MUST precede XL): GPOW(22,2^11-c,11) [3M]
-     * ========================================================================= */
+    
     GPOW_i22_e11(f_X, (one_k << 11) - c_X, gw);
     SELECT(f_X, gpp[33], c_X == 0, f_X); //countM++;
     fp_sqr(f_X_sq, f_X); fp_mul(h1_X, f_X_sq, h1_A); //countS++;
 
-    /* =========================================================================
-     * XL: helper=None, do_hlp=True, sq=6, capture hlp_XL at j=3
-     * ========================================================================= */
+    
     fp_copy(h0_XL, h1_X);
     for (int _j = 0; _j < 6; _j++) {
         if (_j == 3) fp_copy(hlp_XL, h0_XL);
@@ -564,25 +560,23 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     }
     //countS += 6;
 
-    /* =========================================================================
-     * XLH: sq=3, no hlp capture
-     * ========================================================================= */
+    
     fp_copy(h0_XLH, h0_XL);
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_XLH, h0_XLH);
     //countS += 3;
 
-    /* XLH.H leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, h0_XLH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
     uint64_t c_XLH = (uint64_t)tab2[d]>> 1;
 
-    /* XLH correction ret_d=F: GPOW(40,2^3-c,3) [0M] */
+    
     GPOW_i40_e3(h1_XLH, (one_k << 3) - c_XLH, gw);
     SELECT(h1_XLH, gpp[43], c_XLH == 0, h1_XLH);
     fp_mul(u2_XLH, h0_XL, h1_XLH); //countM++;
 
-    /* XLH.L leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, u2_XLH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
@@ -590,10 +584,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     uint64_t e_XLH   = (e1_XLH - 1) & 7ULL;
     uint64_t c_XL_val = c_XLH + (e_XLH << 3);   /* 6-bit */
 
-    /* =========================================================================
-     * XL correction: H-child path GPOW(34,2^6-c,6) [1M] + hlp update GPOW(37,...) [1M]
-     * then f correction GPOW(33,2^6-c,6) [1M] (MUST precede XLL)
-     * ========================================================================= */
+    
     GPOW_i34_e6(h1_XL_h,  (one_k << 6) - c_XL_val, gw);
     SELECT(h1_XL_h,  gpp[40], c_XL_val == 0, h1_XL_h);
     GPOW_i37_e6(hlp1_XL, (one_k << 6) - c_XL_val, gw);
@@ -609,7 +600,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     
     fp_copy(h0_XLL, hlp_XL);
 
-    /* XLL.H leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, h0_XLL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
@@ -620,7 +611,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     SELECT(f_XLL, gpp[42], c_XLL == 0, f_XLL); //countM++;
     fp_sqr(u2_XLL, f_XLL); fp_mul(u2_XLL, u2_XLL, h1_XL_product); //countS++;
 
-    /* XLL.L leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, u2_XLL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
