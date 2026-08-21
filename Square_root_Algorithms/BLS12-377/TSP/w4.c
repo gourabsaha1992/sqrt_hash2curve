@@ -9,12 +9,11 @@
 #include "relic/relic_md.h"
 
 #define w   4
-#define we  16          /* 2^4 */
+#define we  16          
 #define n   46
-#define nw  12          /* ceil(46/4) */
+#define nw  12          
 
-//int countM = 0;
-//int countS = 0;
+
 
 #define REPEAT  100000
 #define WARMUP  (REPEAT / 4)
@@ -104,23 +103,23 @@ static void GPOW_i41_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_copy(t, gw[10][e & 0xF]);
 }
 
-/* GPOW(39,e,3): ri=3, e<<=3, eff=6, rows=2 -> gw[9],gw[10]  M=1 */
+
 static void GPOW_i39_e3(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 3) - 1;
     e <<= 3;
     fp_copy(t, gw[9][e & 0xF]); e >>= 4;
-    fp_mul(t, t, gw[10][e & 0xF]); //countM++;
+    fp_mul(t, t, gw[10][e & 0xF]); 
 }
 
-/* GPOW(40,e,3): ri=0, eff=3, rows=1 -> gw[10]  M=0 */
+
 static void GPOW_i40_e3(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 3) - 1;
     fp_copy(t, gw[10][e & 0xF]);
 }
 
-/* GPOW(35,e,5): ri=3, e<<=3, eff=8, rows=2 -> gw[8],gw[9]  M=1 */
+
 static void GPOW_i35_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 5) - 1;
@@ -129,7 +128,7 @@ static void GPOW_i35_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[9][e & 0xF]); //countM++;
 }
 
-/* GPOW(38,e,5): ri=2, e<<=2, eff=7, rows=2 -> gw[9],gw[10]  M=1 */
+
 static void GPOW_i38_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 5) - 1;
@@ -138,7 +137,7 @@ static void GPOW_i38_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[10][e & 0xF]); //countM++;
 }
 
-/* GPOW(34,e,6): ri=2, e<<=2, eff=8, rows=2 -> gw[8],gw[9]  M=1 */
+
 static void GPOW_i34_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 6) - 1;
@@ -147,7 +146,7 @@ static void GPOW_i34_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[9][e & 0xF]); //countM++;
 }
 
-/* GPOW(37,e,6): ri=1, e<<=1, eff=7, rows=2 -> gw[9],gw[10]  M=1 */
+
 static void GPOW_i37_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 6) - 1;
@@ -156,7 +155,7 @@ static void GPOW_i37_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[10][e & 0xF]); //countM++;
 }
 
-/* GPOW(33,e,6): ri=1, e<<=1, eff=7, rows=2 -> gw[8],gw[9]  M=1 */
+
 static void GPOW_i33_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 6) - 1;
@@ -165,31 +164,31 @@ static void GPOW_i33_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[9][e & 0xF]); //countM++;
 }
 
-/* GPOW(23,e,11): ri=3, e<<=3, eff=14, rows=4 -> gw[5..8]  M=3 */
+
 static void GPOW_i23_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 11) - 1;
     e <<= 3;
     fp_copy(t, gw[5][e & 0xF]); e >>= 4;
-    fp_mul(t, t, gw[6][e & 0xF]); //countM++; 
+    fp_mul(t, t, gw[6][e & 0xF]);
     e >>= 4;
-    fp_mul(t, t, gw[7][e & 0xF]); //countM++; 
+    fp_mul(t, t, gw[7][e & 0xF]);
     e >>= 4;
-    fp_mul(t, t, gw[8][e & 0xF]); //countM++;
+    fp_mul(t, t, gw[8][e & 0xF]);
 }
 
-/* GPOW(29,e,11): ri=1, e<<=1, eff=12, rows=3 -> gw[7,8,9]  M=2 */
+
 static void GPOW_i29_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 11) - 1;
     e <<= 1;
     fp_copy(t, gw[7][e & 0xF]); e >>= 4;
-    fp_mul(t, t, gw[8][e & 0xF]); //countM++; 
+    fp_mul(t, t, gw[8][e & 0xF]);
     e >>= 4;
-    fp_mul(t, t, gw[9][e & 0xF]); //countM++;
+    fp_mul(t, t, gw[9][e & 0xF]);
 }
 
-/* GPOW(0,e,22): ri=0, eff=22, rows=6 -> gw[0..5]  M=5 */
+
 static void GPOW_i0_e22(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 22) - 1;
@@ -205,7 +204,7 @@ static void GPOW_i0_e22(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[5][e & 0xF]); //countM++;
 }
 
-/* GPOW(12,e,23): ri=0, eff=23, rows=6 -> gw[3..8]  M=5 */
+
 static void GPOW_i12_e23(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 23) - 1;
@@ -221,7 +220,7 @@ static void GPOW_i12_e23(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[8][e & 0xF]); //countM++;
 }
 
-/* GPOW(22,e,11): ri=2, e<<=2, eff=13, rows=4 -> gw[5..8]  M=3 */
+
 static void GPOW_i22_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= (1ULL << 11) - 1;
@@ -234,16 +233,14 @@ static void GPOW_i22_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[8][e & 0xF]); //countM++;
 }
 
-/* =========================================================================
- * DLPpow2ext — fully inlined, no recursion, no stack
- * ========================================================================= */
+
 void DLPpow2ext(fp_t u_A, fp_t out_t,
                 fp_t gw[nw][we], fp_t fll[we], fp_t gpp[n], int tab2[16])
 {
     const uint64_t one_k = 1;
     int _ii;
 
-    /* ── Declare all fp_t temporaries ────────────────────────────────── */
+    
     fp_t h0_A, hlp_A;
     fp_t h0_PA, hlp_PA;
     fp_t h0_PAH, hlp_PAH;
@@ -325,7 +322,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     for (int _j = 0; _j < 3; _j++) fp_sqr(h0_PAHH, h0_PAHH);
     //countS += 3;
 
-    /* PAHH.H leaf: i=44, lb=2, shift=2 */
+    
     bn_t tmp_bn;
     dig_t d;
     bn_null(tmp_bn);bn_new(tmp_bn);
@@ -349,7 +346,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     
 
     uint64_t e_PAHH    = (e1_PAHH - 1) & 7ULL;
-    uint64_t c_PAH_val = c_PAHH + (e_PAHH << 2);   /* 5-bit */
+    uint64_t c_PAH_val = c_PAHH + (e_PAHH << 2);  
 
     
     GPOW_i35_e5(h1_PAH,   (one_k << 5) - c_PAH_val, gw);
@@ -363,18 +360,18 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     
     fp_copy(h0_PAHL, hlp_PAH);
 
-    /* PAHL.H leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, h0_PAHL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
     uint64_t c_PAHL = (uint64_t)tab2[d]>> 1;
 
-    /* PAHL correction ret_d=T: GPOW(39,2^3-c,3) [1M] */
+    
     GPOW_i39_e3(f_PAHL, (one_k << 3) - c_PAHL, gw);
     SELECT(f_PAHL, gpp[42], c_PAHL == 0, f_PAHL); //countM++;
     fp_sqr(u2_PAHL, f_PAHL); fp_mul(u2_PAHL, u2_PAHL, u2_PAH); //countS++;
 
-    /* PAHL.L leaf: i=43, lb=3, shift=1 */
+    
     fp_prime_back(tmp_bn, u2_PAHL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3f;
@@ -383,9 +380,9 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_mul(d_PAHL, d_PAHL, f_PAHL); //countM++;
 
     uint64_t e_PAHL      = (e1_PAHL - 1) & 7ULL;
-    uint64_t e1_PAH_node = c_PAHL + (e_PAHL << 3);   /* 6-bit */
+    uint64_t e1_PAH_node = c_PAHL + (e_PAHL << 3);   
 
-    /* Combine PAH -> c_PA (11-bit) */
+    
     uint64_t e_PAH_adj = (e1_PAH_node - 1) & 63ULL;
     uint64_t c_PA      = c_PAH_val + (e_PAH_adj << 5);
 
