@@ -8,57 +8,6 @@
 #include <relic/relic_core.h>
 #include "relic/relic_md.h"
 
-/* =========================================================================
- * Parameters: p (512-bit prime), n=37, w=8
- *
- *   p = 0x17452A017CBDD682A502A1E13A9D671D27958EECD2C33C3A36C2ADE221D9B956
- *         BEA4F49B2B5EE7D7D72AD20065DCB2B8E9CA0015B5152C00000811E000000001
- *   n = 37,  w = 8,  nw = ceil(37/8) = 5,  we = 256
- *
- * Tree (all do_hlp=False except TOP and PA):
- *
- *   TOP (i=0):  lb=37, a=18, b=19, nlb1=10, do_hlp=True
- *     sq 19, capture hlp_A at j=10
- *     c_A = DLP(h0_A, i=19) [PA block]:
- *       PA (i=19): lb=18, a=9, b=9, nlb1=5, do_hlp=True
- *         sq 9, capture hlp_PA at j=5
- *         c_PA = DLP(h0_PA, i=28) [PAH block]:
- *           PAH (i=28): lb=9, a=4, b=5, b<=w -> do_hlp=False
- *             sq 5
- *             leaf-H: i=33, lb=4 -> >> (w-lb)=4 -> c_PAH
- *             GPOW(28,...,4) correct [0 internal muls]
- *             leaf-L: i=32, lb=5 -> >> (w-lb)=3 -> d_PAH
- *             c_PA = c_PAH + ((d_PAH-1)%32)*16
- *         correct PA: GPOW(19,...,9) [1 mul] + GPOW(24,...,9) [1 mul]
- *         d_PA = DLP(u2_PA, i=28, helper=updated_hlp_PA) [PAL block]:
- *           PAL (i=28): else branch, h0=hlp_PA, no squarings
- *             leaf-H: i=33, lb=4 -> >> 4 -> c_PAL
- *             GPOW(28,...,4) [0 muls]
- *             leaf-L: i=32, lb=5 -> >> 3 -> d_PAL
- *             d_PA = c_PAL + ((d_PAL-1)%32)*16
- *         c_A = c_PA + ((d_PA-1)%512)*512
- *     f_A  = GPOW(0,  ((2^18-c_A+1)>>1), 17) [2 muls]
- *     hlp1_A = GPOW(10, 2^18-c_A, 18) [2 muls]  + hlp_A *= hlp1_A
- *     1 sq for f_A^2
- *
- *   EXT2 depth 0 (i=18): lb=19, a=9, b=10, helper=updated_hlp_A (consumed)
- *     c_X0 = DLP(h0_X0=hlp_A, i=28): same as PAH (sq5, leaf-H, GPOW28, leaf-L)
- *     f_X0 = GPOW(17,...,9) [1 mul]
- *     1 sq
- *
- *   EXT2 depth 1 (i=27): lb=10, a=5, b=5, b<=w -> do_hlp=False
- *     sq 5
- *     c_X1 = leaf at i=32, lb=5 -> >> 3
- *     f_X1 = GPOW(26,...,5) [0 muls]
- *     1 sq
- *
- *   EXT2 BASE (i=32, lb=5 <= w):
- *     lookup c1 in rll (>> 3), d1 = fll[c1<<3]
- *
- *   Unwind: t_X1=f_X1*d1; t_X0=f_X0*t_X1; t_A=f_A*t_X0   [3M]
- *
- * Expected: M=24, S=46 (including sqrt_ext's 3M, 0S)
- * ========================================================================= */
 
 #define w   8
 #define we  256      /* 2^w */
@@ -151,19 +100,7 @@ static void SELECT(fp_t a0, fp_t a1, bool ctl, fp_t out)
     else     fp_copy(out, a0);
 }
 
-/* =========================================================================
- * GPOW functions for w=8, n=37
- *
- * GPOW(i=0,  elen=17): ri=0, row=0, adj=17, rows=3, 2 muls
- * GPOW(i=10, elen=18): ri=2, row=1, e<<=2,  adj=20, rows=3, 2 muls
- * GPOW(i=17, elen=9):  ri=1, row=2, e<<=1,  adj=10, rows=2, 1 mul
- * GPOW(i=19, elen=9):  ri=3, row=2, e<<=3,  adj=12, rows=2, 1 mul
- * GPOW(i=24, elen=9):  ri=0, row=3, adj=9,  rows=2, 1 mul
- * GPOW(i=26, elen=5):  ri=2, row=3, e<<=2,  adj=7,  rows=1, 0 muls
- * GPOW(i=28, elen=4):  ri=4, row=3, e<<=4,  adj=8,  rows=1, 0 muls
- * ========================================================================= */
 
-/* GPOW(i=0, elen=17): row=0, adj=17, rows=3, 2 muls */
 static void GPOW_i0_e17(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 17) - 1;
@@ -174,7 +111,7 @@ e >>= w;
     fp_mul(t, t, gw[2][e & wm]); //countM++;
 }
 
-/* GPOW(i=10, elen=18): ri=2, row=1, e<<=2, adj=20, rows=3, 2 muls */
+
 static void GPOW_i10_e18(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 18) - 1; e <<= 2;
@@ -185,7 +122,7 @@ e >>= w;
     fp_mul(t, t, gw[3][e & wm]); //countM++;
 }
 
-/* GPOW(i=17, elen=9): ri=1, row=2, e<<=1, adj=10, rows=2, 1 mul */
+
 static void GPOW_i17_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 9) - 1; e <<= 1;
@@ -194,7 +131,7 @@ static void GPOW_i17_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[3][e & wm]); //countM++;
 }
 
-/* GPOW(i=19, elen=9): ri=3, row=2, e<<=3, adj=12, rows=2, 1 mul */
+
 static void GPOW_i19_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 9) - 1; e <<= 3;
@@ -203,7 +140,7 @@ static void GPOW_i19_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[3][e & wm]); //countM++;
 }
 
-/* GPOW(i=24, elen=9): ri=0, row=3, adj=9, rows=2, 1 mul */
+
 static void GPOW_i24_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 9) - 1;
@@ -212,7 +149,7 @@ static void GPOW_i24_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[4][e & wm]); //countM++;
 }
 
-/* GPOW(i=26, elen=5): ri=2, row=3, e<<=2, adj=7, rows=1, 0 muls */
+
 static void GPOW_i26_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 5) - 1; e <<= 2;
@@ -220,7 +157,7 @@ static void GPOW_i26_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_copy(t, gw[3][e & wm]);
 }
 
-/* GPOW(i=28, elen=4): ri=4, row=3, e<<=4, adj=8, rows=1, 0 muls */
+
 static void GPOW_i28_e4(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 4) - 1; e <<= 4;
@@ -228,16 +165,7 @@ static void GPOW_i28_e4(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_copy(t, gw[3][e & wm]);
 }
 
-/* =========================================================================
- * DLPpow2ext — fully inlined, no recursion.
- *
- * Follows the Sage code exactly:
- *   PAH block  = DLP(i=28): sq5, leaf-H(i=33 lb=4 >>4), GPOW28, leaf-L(i=32 lb=5 >>3)
- *   PAL block  = DLP(i=28, helper=hlp_PA): else branch, no sq, same leaf structure
- *   X0 block   = DLP(i=28, helper=hlp_A):  else branch, sq5, same leaf structure
- *
- * Expected: M=24, S=46
- * ========================================================================= */
+
 void DLPpow2ext(fp_t u_A, fp_t out_t,
                 fp_t gw[nw][we], int rlll[32768], fp_t rll[we], fp_t fll[we], fp_t gpp[n])
 {
@@ -288,10 +216,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_null(t_X0);    fp_new(t_X0);
     fp_null(t_A);     fp_new(t_A);
 
-    /* =========================================================================
-     * TOP: lb=37, a=18, b=19, nlb1=10, do_hlp=True
-     * Square 19; capture hlp_A at j=10.
-     * ========================================================================= */
+    
     fp_copy(h0_A, u_A);
     for (int _j = 0; _j < 19; _j++) {
         if (_j == 10) fp_copy(hlp_A, h0_A);
@@ -299,32 +224,19 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     }
     //countS += 19;
 
-    /* =========================================================================
-     * PA block: DLP(h0_A, i=19)
-     * lb=18, a=9, b=9, nlb1=5, do_hlp=True
-     * Square 9; capture hlp_PA at j=5.
-     * ========================================================================= */
+    
     fp_copy(h0_PA, h0_A);
     for (int _j = 0; _j < 9; _j++) {
         if (_j == 5) fp_copy(hlp_PA, h0_PA);
         fp_sqr(h0_PA, h0_PA);
     }
     //countS += 9;
-//    fp_print(h0_PA);
-    /* =========================================================================
-     * PAH block: DLP(h0_PA, i=28)
-     * lb=9, a=4, b=5, b<=w -> do_hlp=False, helper=None
-     * Square 5.
-     * leaf-H: i=33, lb=4 -> >> (w-lb) = >> 4
-     * correct at i=28, a=4: GPOW_i28_e4 (0 internal muls)
-     * leaf-L: i=32, lb=5 -> >> (w-lb) = >> 3
-     * c_PA = c_PAH + ((d_PAH-1) % 32) * 16
-     * ========================================================================= */
+
     fp_copy(h0_PAH, h0_PA);
     for (int _j = 0; _j < 5; _j++) fp_sqr(h0_PAH, h0_PAH);
     //countS += 5;
 
-    /* leaf-H: i=33, lb=4 -> >> 4 */
+    
 	bn_t tmp_bn;
 	bn_null(tmp_bn);bn_new(tmp_bn);
 	dig_t d;
@@ -332,39 +244,25 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x7fff;
     _tmp=rlll[d];
-//	fp_print(h0_PAH);
-//printf("\n%d\n",_tmp);
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], h0_PAH) == RLC_EQ) _tmp = _ii;
-//printf("\n%d\n",_tmp);
+
     uint64_t c_PAH = (uint64_t)_tmp >> 4;
- //   printf("\n%lx\n",c_PAH);
+
     GPOW_i28_e4(h1_PAH, (one_k << 4) - c_PAH, gw);
-//    fp_print(h1_PAH);
+
     SELECT(h1_PAH, gpp[32], c_PAH == 0, h1_PAH);
     //countM++;
-    fp_mul(u2_PAH, h0_PA, h1_PAH);   /* u_PAH = h0_PA (input to PAH) */
-//    fp_print(u2_PAH);
-    /* leaf-L: i=32, lb=5 -> >> 3 */
+    fp_mul(u2_PAH, h0_PA, h1_PAH);   
+
+   
 
     fp_prime_back(tmp_bn, u2_PAH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7fff;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], u2_PAH) == RLC_EQ) _tmp = _ii;
+
     uint64_t d_PAH = (uint64_t)_tmp >> 3;
-    uint64_t c_PA  = c_PAH + ((d_PAH - 1) % 32) * 16;   /* b=5,a=4 */
-//    printf("\n%lx\n",c_PA);
-    /* =========================================================================
-     * Correct PA at i=19, a=9.
-     * h1_PA  = GPOW(19,...,9)  [1 internal mul]
-     * hlp1_PA = GPOW(24,...,9) [1 internal mul]  (i+nlb1 = 19+5 = 24)
-     * hlp_PA *= hlp1_PA  [1 countM]
-     * u2_PA = h0_A * h1_PA   (u_PA = h0_A = input to DLP48)
-     * ========================================================================= */
+    uint64_t c_PA  = c_PAH + ((d_PAH - 1) % 32) * 16; 
+
     GPOW_i19_e9(h1_PA,   (one_k << 9) - c_PA, gw);
     SELECT(h1_PA,   gpp[28], c_PA == 0, h1_PA);
     GPOW_i24_e9(hlp1_PA, (one_k << 9) - c_PA, gw);
@@ -373,139 +271,100 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     //countM++;
     fp_mul(u2_PA, h0_A, h1_PA);
 
-    /* =========================================================================
-     * PAL block: DLP(u2_PA, i=28, helper=updated_hlp_PA)
-     * else branch: h0_PAL = hlp_PA (updated), no squarings.
-     * Same leaf structure as PAH.
-     * ========================================================================= */
-    fp_copy(h0_PAL, hlp_PA);   /* updated hlp_PA consumed */
+    
+    fp_copy(h0_PAL, hlp_PA);   
 
     /* leaf-H: i=33, lb=4 -> >> 4 */
     fp_prime_back(tmp_bn, h0_PAL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7fff;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], h0_PAL) == RLC_EQ) _tmp = _ii;
+
     uint64_t c_PAL = (uint64_t)_tmp >> 4;
 
     GPOW_i28_e4(h1_PAL, (one_k << 4) - c_PAL, gw);
     SELECT(h1_PAL, gpp[32], c_PAL == 0, h1_PAL);
     //countM++;
-    fp_mul(u2_PAL, u2_PA, h1_PAL);   /* u_PAL = u2_PA */
+    fp_mul(u2_PAL, u2_PA, h1_PAL);   
 
-    /* leaf-L: i=32, lb=5 -> >> 3 */
+    
     fp_prime_back(tmp_bn, u2_PAL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7fff;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], u2_PAL) == RLC_EQ) _tmp = _ii;
+
     uint64_t d_PAL = (uint64_t)_tmp >> 3;
-    uint64_t d_PA  = c_PAL + ((d_PAL - 1) % 32) * 16;   /* b=5,a=4 */
+    uint64_t d_PA  = c_PAL + ((d_PAL - 1) % 32) * 16;   
 
-    /* =========================================================================
-     * Combine: c_A = 18-bit result
-     * c_A = c_PA + ((d_PA-1) % 2^9) * 2^9
-     * ========================================================================= */
-    uint64_t c_A = c_PA + ((d_PA - 1) % 512) * 512;   /* b=9,a=9 */
+    
+    uint64_t c_A = c_PA + ((d_PA - 1) % 512) * 512;  
 
-    /* =========================================================================
-     * f_A: top-level correction.
-     * f_A    = GPOW(0,  ((2^18-c_A+1)>>1), 17)  [2 internal muls]
-     * hlp1_A = GPOW(10, (2^18-c_A),         18)  [2 internal muls]
-     * hlp_A *= hlp1_A  [1 countM]
-     * 1 extra sq for f_A^2 in u_X0.
-     * ========================================================================= */
+    
     GPOW_i0_e17(f_A,    ((one_k << 18) - c_A + 1) >> 1, gw);
     SELECT(f_A,    gpp[17], c_A == 0, f_A);
     GPOW_i10_e18(hlp1_A, (one_k << 18) - c_A, gw);
     SELECT(hlp1_A, gpp[28], c_A == 0, hlp1_A);
     fp_mul(hlp_A, hlp_A, hlp1_A); //countM++;
     //countM++;
-    //countS++;   /* sq for f_A^2 */
+    //countS++;   
 
-    /* =========================================================================
-     * EXT2 depth 0: i_X0=18, lb=19, a=9, b=10
-     * helper=updated_hlp_A (consumed) -> h0_X0 = hlp_A, no squarings.
-     * c_X0 = DLP(h0_X0, i=28): sq5, leaf-H, GPOW28, leaf-L (same as PAH)
-     * f_X0 = GPOW(17,...,9)  [1 mul]
-     * ========================================================================= */
+    
     fp_sqr(f_A_sq, f_A);
     fp_mul(u_X0, u_A, f_A_sq); //countM++;
-    fp_copy(h0_X0, hlp_A);   /* updated hlp_A consumed, no squarings */
+    fp_copy(h0_X0, hlp_A);  
 
     /* sq 5 */
     fp_copy(h0_X0H, h0_X0);
     for (int _j = 0; _j < 5; _j++) fp_sqr(h0_X0H, h0_X0H);
     //countS += 5;
 
-    /* leaf-H: i=33, lb=4 -> >> 4 */
+   
     fp_prime_back(tmp_bn, h0_X0H);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7fff;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], h0_X0H) == RLC_EQ) _tmp = _ii;
+
     uint64_t c_X0H = (uint64_t)_tmp >> 4;
 
     GPOW_i28_e4(h1_X0H, (one_k << 4) - c_X0H, gw);
     SELECT(h1_X0H, gpp[32], c_X0H == 0, h1_X0H);
     //countM++;
-    fp_mul(u2_X0H, h0_X0, h1_X0H);   /* u_X0 input * h1 */
+    fp_mul(u2_X0H, h0_X0, h1_X0H);  
 
-    /* leaf-L: i=32, lb=5 -> >> 3 */
+   
     fp_prime_back(tmp_bn, u2_X0H);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7fff;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], u2_X0H) == RLC_EQ) _tmp = _ii;
+
     uint64_t d_X0H = (uint64_t)_tmp >> 3;
     uint64_t c_X0  = c_X0H + ((d_X0H - 1) % 32) * 16;
 
-    /* f_X0 = GPOW(i_X0-1=17,...,9) [1 internal mul], no hlp */
+    
     GPOW_i17_e9(f_X0, (one_k << 9) - c_X0, gw);
     SELECT(f_X0, gpp[26], c_X0 == 0, f_X0);
     //countM++;
-    //countS++;   /* sq for f_X0^2 */
+    //countS++;
 
-    /* =========================================================================
-     * EXT2 depth 1: i_X1=27, lb=10, a=5, b=5
-     * helper=None, do_hlp=False (b=5 <= w=8)
-     * Square 5.
-     * c_X1 = leaf at i=32, lb=5 -> >> (w-lb) = >> 3
-     * f_X1 = GPOW(26,...,5) [0 internal muls], no hlp
-     * ========================================================================= */
+    
     fp_sqr(f_X0_sq, f_X0);
     fp_mul(u_X1, u_X0, f_X0_sq); //countM++;
     fp_copy(h0_X1, u_X1);
     for (int _j = 0; _j < 5; _j++) fp_sqr(h0_X1, h0_X1);
     //countS += 5;
 
-    /* leaf at i=32, lb=5 -> >> 3 */
+    
     fp_prime_back(tmp_bn, h0_X1);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7fff;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], h0_X1) == RLC_EQ) _tmp = _ii;
+
     uint64_t c_X1 = (uint64_t)_tmp >> 3;
 
     GPOW_i26_e5(f_X1, (one_k << 5) - c_X1, gw);
     SELECT(f_X1, gpp[31], c_X1 == 0, f_X1);
     //countM++;
-    //countS++;   /* sq for f_X1^2 */
-
-    /* =========================================================================
-     * EXT2 BASE: i_X2=32, lb=5 <= w
-     * lookup c1 in rll (>> 3); d1 = fll[c1 << 3]
-     * ========================================================================= */
+    //countS++;   
     fp_sqr(f_X1_sq, f_X1);
     fp_mul(u_X2, u_X1, f_X1_sq);
     fp_prime_back(tmp_bn, u_X2);
@@ -513,31 +372,15 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     d=d&0x7fff;
     _tmp=rlll[d];
 
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], u_X2) == RLC_EQ) _tmp = _ii;
     uint64_t c1_X2 = (uint64_t)_tmp >> 3;
-    fp_copy(t_X1, fll[c1_X2 << 3]);   /* reuse t_X1 as d1_X2 temporarily */
-    //uint64_t e_X2 = c1_X2;            /* no combine at BASE level */
+    fp_copy(t_X1, fll[c1_X2 << 3]);   
 
-    /* =========================================================================
-     * Unwind EXT2 chain
-     * =========================================================================
-     * Sage:
-     *   t_X1 = f_X1 * d1_X2;       e_X1 = c_X1 + ((c1_X2-1) % 2^5) * 2^5
-     *   t_X0 = f_X0 * t_X1;        e_X0 = c_X0 + ((e_X1-1)  % 2^10) * 2^9
-     *   t_A  = f_A  * t_X0;     e_final = c_A  + ((e_X0-1)  % 2^19) * 2^18
-     * ========================================================================= */
-    fp_mul(t_X1, f_X1, t_X1); //countM++;          /* t_X1 = f_X1 * d1_X2 */
-    //uint64_t e_X1 = c_X1 + ((e_X2 - 1) % 32) * 32;   /* b=5,a=5 */
+    
+    fp_mul(t_X1, f_X1, t_X1); //countM++;
 
     fp_mul(t_X0, f_X0, t_X1); //countM++;
-    //uint64_t e_X0 = c_X0 + ((e_X1 - 1) % ((one_k << 10))) * 512;  /* b=10,a=9 */
 
     fp_mul(out_t, f_A, t_X0); //countM++;
-    //(void)(c_A + ((e_X0 - 1) % ((one_k << 19))) * (one_k << 18));  /* e_final unused */
-
-    //fp_copy(out_t, t_A);
 
     /* ---- free all ---- */
     fp_free(h0_A);    fp_free(hlp_A);   fp_free(hlp1_A);
@@ -565,9 +408,7 @@ void sqrt_ext(fp_t x, fp_t y, bn_t e_exp,
     fp_null(u); fp_null(v); fp_null(w_); fp_null(t);
     RLC_TRY {
         fp_new(u); fp_new(v); fp_new(w_); fp_new(t);
-        //fp_print(x);
         fp_exp(v,  x, e_exp);
-        //fp_print(v);
         fp_mul(w_, x, v);  //countM++;
         fp_mul(u,  w_, v); //countM++;
         //fp_print(u);
