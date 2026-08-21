@@ -1,40 +1,4 @@
-/* ===========================================================================
- * Square root in GF(p),  n=192, w=6 — fully inlined, no recursion, no stack
- *
- * p = 2^251 + 17*2^192 + 1,  n=192, w=6, nw=32, we=64
- *
- * Differences from w=8:
- *   - W=6, WE=64, NW=32  (gw[0..31][0..63])
- *   - Leaf shift = w-lb = 6-6 = 0  (all rll >> 0, fll[c<<0]=fll[c])
- *   - h = g^(2^186)  (instead of g^(2^184))
- *   - CHUNK96 macro: no boundary straddle (60 divisible by 6)
- *   - All GPOW functions recomputed for w=6
- *   - GPOW(180,6): ri=0, rows=1, 0 muls → pure table lookup
- *   - GPOW(0,95) and GPOW(48,96): 15 muls each (rows=16)
- *   - GPOW(96,48) and GPOW(120,48): 7 muls each (rows=8)
- *
- * 96-bit integer arithmetic (identical to w=8):
- *   c_A, e_X0   stored in uint120_t.
- *   GPOW(0,95)  takes 95-bit exponent as uint120_t.
- *   GPOW(48,96) takes 96-bit exponent as uint120_t.
- *   All other GPOW exponents fit in uint64_t.
- *
- * Block structure (identical to w=8):
- *   DLP180_normal: sq6, LEAF H (>>0), GPOW(180,6)[0M+cM], LEAF L (>>0)  M=1 S=6
- *   DLP180_else:   no sq, LEAF H, GPOW(180,6)[0M+cM], LEAF L              M=1 S=0
- *   DLP168_normal: sq12, hlp@6, DLP180_normal, GPOW(168,12)+GPOW(174,12)+hlp*=+u2, DLP180_else
- *   DLP168_else:   no sq, DLP180_normal(sq6), GPOW(168,12)+u2, DLP180_normal(sq6)
- *   DLP144_normal: sq24, hlp@12, DLP168_normal, GPOW(144,24)+GPOW(156,24)+hlp*=+u2, DLP168_else
- *   DLP144_else:   no sq, DLP168_normal, GPOW(144,24)+u2, DLP168_normal
- *   PA=DLP96:      sq48, hlp@24, DLP144_normal, GPOW(96,48)+GPOW(120,48)+hlp*=+u2, DLP144_else
- *   EXT2_X0: else(hlp_A), DLP144_normal inner, GPOW(95,48)
- *   EXT2_X1: sq24, hlp@12, DLP168_normal inner, GPOW(143,24)+GPOW(156,24)+hlp*=+uncond
- *   EXT2_X2: else(hlp_X1), DLP180_normal inner, GPOW(167,12)
- *   EXT2_X3: sq6, LEAF H (>>0), GPOW(179,6)
- *   EXT2_BASE: i=186, lb=6=w, rll>>0→c1, fll[c1]→d1
- *
- * Expected: M=138, S=347
- * =========================================================================== */
+
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -43,7 +7,7 @@
 #include <relic/relic_fp.h>
 #include <immintrin.h>
 
-/* ── 120-bit integer (two 60-bit limbs, identical to w=8) ───────────────── */
+
 #define LIMB_BITS  60
 #define LIMB_MASK  0x0FFFFFFFFFFFFFFFull
 
@@ -73,22 +37,18 @@ static inline uint120_t rshift120(uint120_t a, int n) {
     return make120(0, (a.high >> (n - LIMB_BITS)) & LIMB_MASK);
 }
 
-/* 2^96 in uint120_t: bit 96 = high bit 36 */
+
 #define POW96   make120(1ull << 36, 0)
-/* 48-bit mask */
+
 #define MASK48  0x0000FFFFFFFFFFFFull
 
-/* ── CHUNK96 for w=6 ─────────────────────────────────────────────────────────
- * Extract 6-bit chunk k (k=0..15) from a 96-bit value in uint120_t.
- * low  holds bits  0-59, high holds bits 60-95.
- * Since 60 is exactly divisible by 6, chunk k=10 starts cleanly at bit 60.
- * NO boundary straddle — simpler than the w=8 case.              */
+
 #define CHUNK96(e120, k) \
     ( ((k) < 10) \
       ? (uint8_t)((e120).low  >> ((k) * 6)) & 0x3F \
       : (uint8_t)((e120).high >> (((k) - 10) * 6)) & 0x3F )
 
-/* ── Platform clock (identical to w=8) ──────────────────────────────────── */
+
 #define REPEAT  100000
 #define WARMUP  (REPEAT / 4)
 
@@ -136,7 +96,6 @@ static inline unsigned long long get_Clks(void)
 }
 
 
-/* ── Sizes ───────────────────────────────────────────────────────────────── */
 #define W   6
 #define WE  64     /* 2^6 */
 #define N   192
@@ -144,7 +103,7 @@ static inline unsigned long long get_Clks(void)
 
 int countM = 0, countS = 0;
 
-/* ── Helpers (identical to w=8) ─────────────────────────────────────────── */
+
 static void SELECT(fp_t a0, fp_t a1, bool ctl, fp_t out) {
     if (ctl) fp_copy(out, a1); else fp_copy(out, a0);
 }
@@ -154,20 +113,14 @@ static int rll_lookup(fp_t x, fp_t rll[WE]) {
     return 0;
 }
 
-/* ── GPOW functions for w=6, n=192 ──────────────────────────────────────────
- * All ri=0 so no pre-shift needed, except for GPOW(95,48), GPOW(143,24),
- * GPOW(167,12), GPOW(179,6) where ri=5.
- * Window mask = 0x3F (6 bits).                                              */
 
-/* GPOW(180,6): ri=0, row=30, adj=6, rows=1, muls=0
- * Pure table lookup — no fp_mul inside. */
 static void GPOW_180_6(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1u << 6) - 1;
     fp_copy(t, gw[30][e & 0x3F]);
 }
 
-/* GPOW(174,12): ri=0, row=29, adj=12, rows=2, muls=1 */
+
 static void GPOW_174_12(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1u << 12) - 1;
@@ -176,7 +129,7 @@ static void GPOW_174_12(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(168,12): ri=0, row=28, adj=12, rows=2, muls=1 */
+
 static void GPOW_168_12(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1u << 12) - 1;
@@ -185,7 +138,7 @@ static void GPOW_168_12(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(156,24): ri=0, row=26, adj=24, rows=4, muls=3 */
+
 static void GPOW_156_24(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1ull << 24) - 1;
@@ -200,7 +153,7 @@ static void GPOW_156_24(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(144,24): ri=0, row=24, adj=24, rows=4, muls=3 */
+
 static void GPOW_144_24(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1ull << 24) - 1;
@@ -215,7 +168,7 @@ static void GPOW_144_24(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(120,48): ri=0, row=20, adj=48, rows=8, muls=7 */
+
 static void GPOW_120_48(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= MASK48;
@@ -242,7 +195,7 @@ static void GPOW_120_48(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(96,48): ri=0, row=16, adj=48, rows=8, muls=7 */
+
 static void GPOW_96_48(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= MASK48;
@@ -269,12 +222,10 @@ static void GPOW_96_48(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(0,95): ri=0, row=0, adj=95, rows=16, muls=15
- * Takes 96-bit exponent as uint120_t.
- * CHUNK96(e,k): k=0..9 from low, k=10..15 from high — no straddle. */
+
 static void GPOW_0_95(fp_t t, uint120_t e, fp_t gw[NW][WE])
 {
-    /* mask to 95 bits: clear bit 95 (= high bit 35) */
+    
     e.high &= ~(1ull << 35);
     fp_copy(t, gw[ 0][CHUNK96(e,  0)]);
     fp_mul(t, t, gw[ 1][CHUNK96(e,  1)]); 
@@ -309,11 +260,10 @@ static void GPOW_0_95(fp_t t, uint120_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(48,96): ri=0, row=8, adj=96, rows=16, muls=15
- * Takes 96-bit exponent as uint120_t. */
+
 static void GPOW_48_96(fp_t t, uint120_t e, fp_t gw[NW][WE])
 {
-    /* mask to 96 bits: bits 0-95 */
+   
     e.high &= (1ull << 36) - 1;
     fp_copy(t, gw[ 8][CHUNK96(e,  0)]);
     fp_mul(t, t, gw[ 9][CHUNK96(e,  1)]); 
@@ -348,7 +298,7 @@ static void GPOW_48_96(fp_t t, uint120_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(95,48): ri=5, row=15, adj=53, rows=9, muls=8 */
+
 static void GPOW_95_48(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= MASK48; e <<= 5;
@@ -378,7 +328,7 @@ static void GPOW_95_48(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(143,24): ri=5, row=23, adj=29, rows=5, muls=4 */
+
 static void GPOW_143_24(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1ull << 24) - 1; e <<= 5;
@@ -396,7 +346,7 @@ static void GPOW_143_24(fp_t t, uint64_t e, fp_t gw[NW][WE])
     //countM++;
 }
 
-/* GPOW(167,12): ri=5, row=27, adj=17, rows=3, muls=2 */
+
 static void GPOW_167_12(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1u << 12) - 1; e <<= 5;
@@ -406,7 +356,6 @@ static void GPOW_167_12(fp_t t, uint64_t e, fp_t gw[NW][WE])
     fp_mul(t, t, gw[29][e & 0x3F]); //countM++;
 }
 
-/* GPOW(179,6): ri=5, row=29, adj=11, rows=2, muls=1 */
 static void GPOW_179_6(fp_t t, uint64_t e, fp_t gw[NW][WE])
 {
     e &= (1u << 6) - 1; e <<= 5;
@@ -414,7 +363,6 @@ static void GPOW_179_6(fp_t t, uint64_t e, fp_t gw[NW][WE])
     fp_mul(t, t, gw[30][e & 0x3F]); //countM++;
 }
 
-/* ── Precomputation ──────────────────────────────────────────────────────── */
 void precomputation(fp_t g, fp_t h, fp_t hh,
                     fp_t gw[NW][WE], fp_t rll[WE], fp_t fll[WE], fp_t gpp[N])
 {
@@ -443,12 +391,12 @@ void precomputation(fp_t g, fp_t h, fp_t hh,
     bn_free(one);
 }
 
-/* ── solve_dlp_pow2_flat ─────────────────────────────────────────────────── */
+
 void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
                          fp_t gw[NW][WE],int rlll[2048], fp_t rll[WE], fp_t fll[WE],
                          fp_t gpp[N])
 {
-    /* === Declare all field temporaries === */
+    
     fp_t h0_A, h0_PA, h0_PAH, h0_PAHH, hlp_A, hlp_PA, hlp_PAH, hlp_PAHH;
     fp_t h1_PAHHH, u2_PAHHH, h1_PAHH, hlp1_PAHH, u2_PAHH;
     fp_t h0_PAHHL, h1_PAHHL, u2_PAHHL;
@@ -518,36 +466,28 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     FP_ALLOC(f_X2); FP_ALLOC(u_X3); FP_ALLOC(h0_X3); FP_ALLOC(f_X3); FP_ALLOC(u_X4);
     FP_ALLOC(t_X3); FP_ALLOC(t_X2); FP_ALLOC(t_X1); FP_ALLOC(t_X0); FP_ALLOC(t_A);
 
-    /* =========================================================================
-     * TOP: sq96; capture hlp_A at j=48.
-     * ========================================================================= */
+   
     fp_copy(h0_A, u_A);
     for (int j = 0; j < 96; j++) {
         if (j == 48) fp_copy(hlp_A, h0_A);
         fp_sqr(h0_A, h0_A); //countS++;
     }
 
-    /* =========================================================================
-     * PA: sq48; capture hlp_PA at j=24.
-     * ========================================================================= */
+   
     fp_copy(h0_PA, h0_A);
     for (int j = 0; j < 48; j++) {
         if (j == 24) fp_copy(hlp_PA, h0_PA);
         fp_sqr(h0_PA, h0_PA); //countS++;
     }
 
-    /* =========================================================================
-     * PAH = DLP144_normal(h0_PA): sq24, hlp_PAH at j=12.
-     * ========================================================================= */
+  
     fp_copy(h0_PAH, h0_PA);
     for (int j = 0; j < 24; j++) {
         if (j == 12) fp_copy(hlp_PAH, h0_PAH);
         fp_sqr(h0_PAH, h0_PAH); //countS++;
     }
 
-    /* =========================================================================
-     * PAHH = DLP168_normal(h0_PAH): sq12, hlp_PAHH at j=6.
-     * ========================================================================= */
+
     fp_copy(h0_PAHH, h0_PAH);
     for (int j = 0; j < 12; j++) {
         if (j == 6) fp_copy(hlp_PAHH, h0_PAHH);
@@ -555,11 +495,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     }
 
     {
-    /* =========================================================================
-     * PAHHH = DLP180_normal(h0_PAHH): sq6, LEAF H (>>0), GPOW(180,6)[0M+cM], LEAF L (>>0)
-     * NOTE w=6: leaf shift = w-lb = 6-6 = 0, so rll[..] >> 0 = rll[..]
-     * GPOW(180,6) has 0 internal muls (rows=1): just a table copy.
-     * ========================================================================= */
+ 
     fp_t h0_PAHHH; fp_null(h0_PAHHH); fp_new(h0_PAHHH);
     fp_copy(h0_PAHHH, h0_PAHH);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_PAHHH, h0_PAHHH); //countS++; 
@@ -573,7 +509,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PAHHH =_tmp;
-    //(uint64_t)rll_lookup(h0_PAHHH, rll) >> 0; /* leaf >>0 */
+  
     GPOW_180_6(h1_PAHHH, (1u << 6) - c_PAHHH, gw);
     SELECT(h1_PAHHH, gpp[186], c_PAHHH == 0, h1_PAHHH);
     //countM++;
@@ -583,40 +519,40 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PAHHH  = _tmp;
-    //(uint64_t)rll_lookup(u2_PAHHH, rll) >> 0;
+
     uint64_t c_PAHH_H = c_PAHHH + ((d_PAHHH - 1) & 0x3Full) * 64;   /* 12-bit */
 
     fp_free(h0_PAHHH);
 
-    /* PAHH correct: GPOW(168,12)[1M]; GPOW(174,12)[1M]; hlp_PAHH *= */
+  
     GPOW_168_12(h1_PAHH,   (1u << 12) - c_PAHH_H, gw);
     SELECT(h1_PAHH,   gpp[180], c_PAHH_H == 0, h1_PAHH);
     GPOW_174_12(hlp1_PAHH, (1u << 12) - c_PAHH_H, gw);
     SELECT(hlp1_PAHH, gpp[186], c_PAHH_H == 0, hlp1_PAHH);
-    fp_mul(hlp_PAHH, hlp_PAHH, hlp1_PAHH); //countM++;  /* hlp *= */
-    fp_mul(u2_PAHH,  h0_PAH,   h1_PAHH);   //countM++;  /* u=h0_PAH */
+    fp_mul(hlp_PAHH, hlp_PAHH, hlp1_PAHH); //countM++; 
+    fp_mul(u2_PAHH,  h0_PAH,   h1_PAHH);   //countM++; 
 
-    /* PAHHL = DLP180_else(u2_PAHH, h0=updated_hlp_PAHH): no sq6 */
+
     fp_prime_back(tmp_bn, hlp_PAHH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PAHHL_H = _tmp;
-    //(uint64_t)rll_lookup(hlp_PAHH, rll) >> 0;
+   
     GPOW_180_6(h1_PAHHL, (1u << 6) - c_PAHHL_H, gw);
     SELECT(h1_PAHHL, gpp[186], c_PAHHL_H == 0, h1_PAHHL);
     //countM++;
-    fp_mul(u2_PAHHL, u2_PAHH, h1_PAHHL);    /* u=u2_PAHH */
+    fp_mul(u2_PAHHL, u2_PAHH, h1_PAHHL);    
     fp_prime_back(tmp_bn, u2_PAHHL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PAHHL   = _tmp;
-    //(uint64_t)rll_lookup(u2_PAHHL, rll) >> 0;
+
     uint64_t c_PAHH_L  = c_PAHHL_H + ((d_PAHHL - 1) & 0x3Full) * 64;
     uint64_t c_PAHH    = c_PAHH_H  + ((c_PAHH_L - 1) & 0xFFFull) * 4096;  /* 24-bit */
 
-    /* PAH correct: GPOW(144,24)[3M]; GPOW(156,24)[3M] (i+nlb1=144+12=156); hlp_PAH *= */
+  
     GPOW_144_24(h1_PAH,   (1ull << 24) - c_PAHH, gw);
     SELECT(h1_PAH,   gpp[168], c_PAHH == 0, h1_PAH);
     GPOW_156_24(hlp1_PAH, (1ull << 24) - c_PAHH, gw);
@@ -624,12 +560,10 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     fp_mul(hlp_PAH, hlp_PAH, hlp1_PAH); //countM++;  /* hlp *= */
     fp_mul(u2_PAH,  h0_PA,   h1_PAH);   //countM++;  /* u=h0_PA */
 
-    /* =========================================================================
-     * PAHL = DLP168_else(u2_PAH, h0=updated_hlp_PAH): no sq12
-     * ========================================================================= */
+
     fp_copy(h0_PAHL, hlp_PAH);
 
-    /* PAHLH = DLP180_normal(h0_PAHL): sq6 of h0_PAHL */
+
     fp_copy(h0_PAHLH, h0_PAHL);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_PAHLH, h0_PAHLH); //countS++; 
     }
@@ -638,7 +572,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PAHLH_H = _tmp;
-    //(uint64_t)rll_lookup(h0_PAHLH, rll) >> 0;
+
     GPOW_180_6(h1_PAHLH, (1u << 6) - c_PAHLH_H, gw);
     SELECT(h1_PAHLH, gpp[186], c_PAHLH_H == 0, h1_PAHLH);
     //countM++;
@@ -648,15 +582,14 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PAHLH  = _tmp;
-    //(uint64_t)rll_lookup(u2_PAHLH, rll) >> 0;
+
     uint64_t c_PAHLH  = c_PAHLH_H + ((d_PAHLH - 1) & 0x3Full) * 64;
 
-    /* PAHL correct: GPOW(168,12)[1M]; no hlp (else branch) */
     GPOW_168_12(h1_PAHL, (1u << 12) - c_PAHLH, gw);
     SELECT(h1_PAHL, gpp[180], c_PAHLH == 0, h1_PAHL);
-    fp_mul(u2_PAHL, u2_PAH, h1_PAHL); //countM++;    /* u=u2_PAH */
+    fp_mul(u2_PAHL, u2_PAH, h1_PAHL); //countM++;
 
-    /* PAHLL = DLP180_normal(u2_PAHL): sq6 */
+
     fp_copy(h0_PAHLL, u2_PAHL);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_PAHLL, h0_PAHLL); //countS++; 
     }
@@ -665,25 +598,23 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PAHLL_H = _tmp;
-    //(uint64_t)rll_lookup(h0_PAHLL, rll) >> 0;
+
     GPOW_180_6(h1_PAHLL, (1u << 6) - c_PAHLL_H, gw);
     SELECT(h1_PAHLL, gpp[186], c_PAHLL_H == 0, h1_PAHLL);
     //countM++;
-    fp_mul(u2_PAHLL, u2_PAHL, h1_PAHLL);    /* u=u2_PAHL */
+    fp_mul(u2_PAHLL, u2_PAHL, h1_PAHLL); 
     fp_prime_back(tmp_bn, u2_PAHLL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PAHLL = _tmp;
-    //(uint64_t)rll_lookup(u2_PAHLL, rll) >> 0;
+
     uint64_t c_PAHLL = c_PAHLL_H + ((d_PAHLL - 1) & 0x3Full) * 64;
     uint64_t c_PAHL  = c_PAHLH   + ((c_PAHLL - 1) & 0xFFFull) * 4096;  /* 24-bit */
 
     uint64_t c_PAH_48 = c_PAHH + ((c_PAHL - 1) & 0xFFFFFFull) * (1ull << 24); /* 48-bit */
 
-    /* =========================================================================
-     * PA correct: GPOW(96,48)[7M]; GPOW(120,48)[7M] (i+nlb1=96+24=120); hlp_PA *=
-     * ========================================================================= */
+
     GPOW_96_48(h1_PA,   ((1ull << 48) - c_PAH_48) & MASK48, gw);
     SELECT(h1_PA,   gpp[144], c_PAH_48 == 0, h1_PA);
     GPOW_120_48(hlp1_PA, ((1ull << 48) - c_PAH_48) & MASK48, gw);
@@ -691,19 +622,16 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     fp_mul(hlp_PA, hlp_PA, hlp1_PA); //countM++;
     fp_mul(u2_PA,  h0_A,   h1_PA);   //countM++;    /* u=h0_A */
 
-    /* =========================================================================
-     * PAL = DLP144_else(u2_PA, h0=updated_hlp_PA): no sq24
-     * ========================================================================= */
+
     fp_copy(h0_PAL, hlp_PA);
 
-    /* PALH = DLP168_normal(h0_PAL): sq12, hlp_PALH at j=6 */
     fp_copy(h0_PALH, h0_PAL);
     fp_set_dig(hlp_PALH, 1);
     for (int j = 0; j < 12; j++) {
         if (j == 6) fp_copy(hlp_PALH, h0_PALH);
         fp_sqr(h0_PALH, h0_PALH); //countS++;
     }
-    /* PALHH = DLP180_normal(h0_PALH): sq6 */
+
     fp_copy(h0_PALHH, h0_PALH);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_PALHH, h0_PALHH); //countS++; 
     }
@@ -712,7 +640,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PALHH_H = _tmp;
-    //(uint64_t)rll_lookup(h0_PALHH, rll) >> 0;
+
     GPOW_180_6(h1_PALHH, (1u << 6) - c_PALHH_H, gw);
     SELECT(h1_PALHH, gpp[186], c_PALHH_H == 0, h1_PALHH);
     //countM++;
@@ -722,10 +650,9 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PALHH = _tmp;
-    //(uint64_t)rll_lookup(u2_PALHH, rll) >> 0;
+
     uint64_t c_PALHH = c_PALHH_H + ((d_PALHH - 1) & 0x3Full) * 64;
 
-    /* PALH correct: GPOW(168,12)[1M]; GPOW(174,12)[1M]; hlp_PALH *= */
     GPOW_168_12(h1_PALH,   (1u << 12) - c_PALHH, gw);
     SELECT(h1_PALH,   gpp[180], c_PALHH == 0, h1_PALH);
     GPOW_174_12(hlp1_PALH, (1u << 12) - c_PALHH, gw);
@@ -733,13 +660,13 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     fp_mul(hlp_PALH, hlp_PALH, hlp1_PALH); //countM++;
     fp_mul(u2_PALH,  h0_PAL,   h1_PALH);   //countM++;    /* u=h0_PAL */
 
-    /* PALHL = DLP180_else(u2_PALH, h0=updated_hlp_PALH): no sq6 */
+
     fp_prime_back(tmp_bn, hlp_PALH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PALHL_H = _tmp;
-    //(uint64_t)rll_lookup(hlp_PALH, rll) >> 0;
+   
     GPOW_180_6(h1_PALHL, (1u << 6) - c_PALHL_H, gw);
     SELECT(h1_PALHL, gpp[186], c_PALHL_H == 0, h1_PALHL);
     //countM++;
@@ -749,23 +676,23 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PALHL  = _tmp;
-    //(uint64_t)rll_lookup(u2_PALHL, rll) >> 0;
+    
     uint64_t c_PALHL  = c_PALHL_H + ((d_PALHL - 1) & 0x3Full) * 64;
     uint64_t c_PALH_24 = c_PALHH   + ((c_PALHL - 1) & 0xFFFull) * 4096;  /* 24-bit */
 
-    /* PAL correct: GPOW(144,24)[3M]; no hlp (else branch) */
+    
     GPOW_144_24(h1_PAL, (1ull << 24) - c_PALH_24, gw);
     SELECT(h1_PAL, gpp[168], c_PALH_24 == 0, h1_PAL);
     fp_mul(u2_PAL, u2_PA, h1_PAL); //countM++;    /* u=u2_PA */
 
-    /* PALL = DLP168_normal(u2_PAL): sq12, hlp_PALL at j=6 */
+    
     fp_copy(h0_PALL, u2_PAL);
     fp_set_dig(hlp_PALL, 1);
     for (int j = 0; j < 12; j++) {
         if (j == 6) fp_copy(hlp_PALL, h0_PALL);
         fp_sqr(h0_PALL, h0_PALL); //countS++;
     }
-    /* PALLH = DLP180_normal(h0_PALL): sq6 */
+   
     fp_copy(h0_PALLH, h0_PALL);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_PALLH, h0_PALLH); //countS++; 
     }
@@ -774,7 +701,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PALLH_H = _tmp;
-    //(uint64_t)rll_lookup(h0_PALLH, rll) >> 0;
+    
     GPOW_180_6(h1_PALLH, (1u << 6) - c_PALLH_H, gw);
     SELECT(h1_PALLH, gpp[186], c_PALLH_H == 0, h1_PALLH);
     //countM++;
@@ -784,10 +711,10 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PALLH = _tmp;
-    //(uint64_t)rll_lookup(u2_PALLH, rll) >> 0;
+    
     uint64_t c_PALLH = c_PALLH_H + ((d_PALLH - 1) & 0x3Full) * 64;
 
-    /* PALL correct: GPOW(168,12)[1M]; GPOW(174,12)[1M]; hlp_PALL *= */
+    
     GPOW_168_12(h1_PALL,   (1u << 12) - c_PALLH, gw);
     SELECT(h1_PALL,   gpp[180], c_PALLH == 0, h1_PALL);
     GPOW_174_12(hlp1_PALL, (1u << 12) - c_PALLH, gw);
@@ -795,13 +722,13 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     fp_mul(hlp_PALL, hlp_PALL, hlp1_PALL); //countM++;
     fp_mul(u2_PALL,  u2_PAL,   h1_PALL);   //countM++;    /* u=u2_PAL */
 
-    /* PALLL = DLP180_else(u2_PALL, h0=updated_hlp_PALL): no sq6 */
+    
     fp_prime_back(tmp_bn, hlp_PALL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_PALLL_H = _tmp;
-    //(uint64_t)rll_lookup(hlp_PALL, rll) >> 0;
+    
     GPOW_180_6(h1_PALLL, (1u << 6) - c_PALLL_H, gw);
     SELECT(h1_PALLL, gpp[186], c_PALLL_H == 0, h1_PALLL);
     //countM++;
@@ -811,24 +738,19 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_PALLL   = _tmp;
-    //(uint64_t)rll_lookup(u2_PALLL, rll) >> 0;
+    
     uint64_t c_PALLL   = c_PALLL_H  + ((d_PALLL - 1) & 0x3Full) * 64;
-    uint64_t c_PALL_24 = c_PALLH    + ((c_PALLL - 1) & 0xFFFull) * 4096;  /* 24-bit */
+    uint64_t c_PALL_24 = c_PALLH    + ((c_PALLL - 1) & 0xFFFull) * 4096;
 
-    uint64_t d_PAL_48 = c_PALH_24 + ((c_PALL_24 - 1) & 0xFFFFFFull) * (1ull << 24); /* 48-bit */
+    uint64_t d_PAL_48 = c_PALH_24 + ((c_PALL_24 - 1) & 0xFFFFFFull) * (1ull << 24); 
 
-    /* c_A = 96-bit: c_PAH_48 (bits 0-47) | (d_PAL_48-1) (bits 48-95) */
+    
     uint64_t d_PAL_m1 = (d_PAL_48 - 1) & MASK48;
     uint120_t c_A;
     c_A.low  = (c_PAH_48 | ((d_PAL_m1 & 0xFFFull) << 48)) & LIMB_MASK;
     c_A.high = (d_PAL_m1 >> 12) & LIMB_MASK;
 
-    /* =========================================================================
-     * TOP correction:
-     * f_A    = GPOW(0, ((2^96-c_A+1)>>1), 95)   [15M]
-     * hlp1_A = GPOW(48, 2^96-c_A, 96)            [15M]  (i+nlb1=48)
-     * hlp_A *= hlp1_A;  countM++ (hlp*=);  countM++ (unconditional);  countS++ (f_A^2)
-     * ========================================================================= */
+    
     uint120_t exp_fA = rshift120(add120(sub120(POW96, c_A), make120(0, 1)), 1);
     GPOW_0_95(f_A, exp_fA, gw);
     bool cA_zero = (c_A.low == 0 && c_A.high == 0);
@@ -838,32 +760,29 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     GPOW_48_96(hlp1_A, exp_hlp1A, gw);
     SELECT(hlp1_A, gpp[144], cA_zero, hlp1_A);
 
-    fp_mul(hlp_A, hlp_A, hlp1_A); //countM++;   /* hlp *= */
-    //countM++;                                   /* unconditional */
-    fp_sqr(u_X0, f_A); //countS++;               /* f_A^2 */
-    fp_mul(u_X0, u_X0, u_A);                   /* u_X0 = u_A * f_A^2 (not counted) */
+    fp_mul(hlp_A, hlp_A, hlp1_A); //countM++;  
+    //countM++;                                  
+    fp_sqr(u_X0, f_A); //countS++;          
+    fp_mul(u_X0, u_X0, u_A);                
 
-    /* =========================================================================
-     * EXT2_X0: else(hlp_A), h0_X0=updated_hlp_A, no sq.
-     * inner = DLP144_normal(h0_X0)
-     * ========================================================================= */
+   
     fp_copy(h0_X0, hlp_A);
 
-    /* X0P = DLP144_normal(h0_X0): sq24, hlp_X0P at j=12 */
+    
     fp_copy(h0_X0P, h0_X0);
     fp_set_dig(hlp_X0P, 1);
     for (int j = 0; j < 24; j++) {
         if (j == 12) fp_copy(hlp_X0P, h0_X0P);
         fp_sqr(h0_X0P, h0_X0P); //countS++;
     }
-    /* X0PH = DLP168_normal(h0_X0P): sq12, hlp_X0PH at j=6 */
+    
     fp_copy(h0_X0PH, h0_X0P);
     fp_set_dig(hlp_X0PH, 1);
     for (int j = 0; j < 12; j++) {
         if (j == 6) fp_copy(hlp_X0PH, h0_X0PH);
         fp_sqr(h0_X0PH, h0_X0PH); //countS++;
     }
-    /* X0PHH = DLP180_normal(h0_X0PH): sq6 */
+   
     fp_copy(h0_X0PHH, h0_X0PH);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_X0PHH, h0_X0PHH); //countS++; 
     }
@@ -872,7 +791,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X0PHH_H = _tmp;
-    //(uint64_t)rll_lookup(h0_X0PHH, rll) >> 0;
+
     GPOW_180_6(h1_X0PHH, (1u << 6) - c_X0PHH_H, gw);
     SELECT(h1_X0PHH, gpp[186], c_X0PHH_H == 0, h1_X0PHH);
     //countM++;
@@ -882,10 +801,10 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_X0PHH = _tmp;
-    //(uint64_t)rll_lookup(u2_X0PHH, rll) >> 0;
+ 
     uint64_t c_X0PHH = c_X0PHH_H + ((d_X0PHH - 1) & 0x3Full) * 64;
 
-    /* X0PH correct: GPOW(168,12)[1M]; GPOW(174,12)[1M]; hlp_X0PH *= */
+
     GPOW_168_12(h1_X0PH,   (1u << 12) - c_X0PHH, gw);
     SELECT(h1_X0PH,   gpp[180], c_X0PHH == 0, h1_X0PH);
     GPOW_174_12(hlp1_X0PH, (1u << 12) - c_X0PHH, gw);
@@ -893,13 +812,13 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     fp_mul(hlp_X0PH, hlp_X0PH, hlp1_X0PH); //countM++;
     fp_mul(u2_X0PH,  h0_X0P,   h1_X0PH);   //countM++;
 
-    /* X0PHL = DLP180_else(u2_X0PH, h0=updated_hlp_X0PH): no sq6 */
+  
     fp_prime_back(tmp_bn, hlp_X0PH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X0PHL_H = _tmp;
-    //(uint64_t)rll_lookup(hlp_X0PH, rll) >> 0;
+
     GPOW_180_6(h1_X0PHL, (1u << 6) - c_X0PHL_H, gw);
     SELECT(h1_X0PHL, gpp[186], c_X0PHL_H == 0, h1_X0PHL);
     //countM++;
@@ -909,22 +828,18 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_X0PHL  = _tmp;
-    //(uint64_t)rll_lookup(u2_X0PHL, rll) >> 0;
+
     uint64_t c_X0PHL  = c_X0PHL_H + ((d_X0PHL - 1) & 0x3Full) * 64;
     uint64_t c_X0PH_24 = c_X0PHH + ((c_X0PHL - 1) & 0xFFFull) * 4096;
 
-    /* X0P correct: GPOW(144,24)[3M]; GPOW(156,24)[3M]; hlp_X0P *= */
+
     GPOW_144_24(h1_X0P,   (1ull << 24) - c_X0PH_24, gw);
     SELECT(h1_X0P,   gpp[168], c_X0PH_24 == 0, h1_X0P);
     GPOW_156_24(hlp1_X0P, (1ull << 24) - c_X0PH_24, gw);
     SELECT(hlp1_X0P, gpp[180], c_X0PH_24 == 0, hlp1_X0P);
     fp_mul(hlp_X0P, hlp_X0P, hlp1_X0P); //countM++;
     fp_mul(u2_X0P,  h0_X0,   h1_X0P);   //countM++;    /* u=h0_X0 */
-
-    /* X0PL = DLP168_else(u2_X0P, h0=updated_hlp_X0P): no sq12 */
     fp_copy(h0_X0PL, hlp_X0P);
-
-    /* X0PLH = DLP180_normal(h0_X0PL): sq6 of h0_X0PL */
     fp_copy(h0_X0PLH, h0_X0PL);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_X0PLH, h0_X0PLH); //countS++; 
     }
@@ -933,7 +848,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X0PLH_H = _tmp;
-    //(uint64_t)rll_lookup(h0_X0PLH, rll) >> 0;
+
     GPOW_180_6(h1_X0PLH, (1u << 6) - c_X0PLH_H, gw);
     SELECT(h1_X0PLH, gpp[186], c_X0PLH_H == 0, h1_X0PLH);
     //countM++;
@@ -943,15 +858,15 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_X0PLH = _tmp;
-    //(uint64_t)rll_lookup(u2_X0PLH, rll) >> 0;
+
     uint64_t c_X0PLH = c_X0PLH_H + ((d_X0PLH - 1) & 0x3Full) * 64;
 
-    /* X0PL correct: GPOW(168,12)[1M]; no hlp (else branch) */
+
     GPOW_168_12(h1_X0PL, (1u << 12) - c_X0PLH, gw);
     SELECT(h1_X0PL, gpp[180], c_X0PLH == 0, h1_X0PL);
     fp_mul(u2_X0PL, u2_X0P, h1_X0PL); //countM++;    /* u=u2_X0P */
 
-    /* X0PLL = DLP180_normal(u2_X0PL): sq6 */
+
     fp_copy(h0_X0PLL, u2_X0PL);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_X0PLL, h0_X0PLL); //countS++; 
     }
@@ -960,7 +875,7 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X0PLL_H = _tmp;
-    //(uint64_t)rll_lookup(h0_X0PLL, rll) >> 0;
+
     GPOW_180_6(h1_X0PLL, (1u << 6) - c_X0PLL_H, gw);
     SELECT(h1_X0PLL, gpp[186], c_X0PLL_H == 0, h1_X0PLL);
     //countM++;
@@ -970,37 +885,34 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_X0PLL  = _tmp;
-    //(uint64_t)rll_lookup(u2_X0PLL, rll) >> 0;
+
     uint64_t c_X0PLL  = c_X0PLL_H  + ((d_X0PLL - 1) & 0x3Full) * 64;
     uint64_t c_X0PL_24 = c_X0PLH   + ((c_X0PLL - 1) & 0xFFFull) * 4096;
 
     uint64_t c_X0_48 = c_X0PH_24 + ((c_X0PL_24 - 1) & 0xFFFFFFull) * (1ull << 24); /* 48-bit */
 
-    /* f_X0 = GPOW(95, 2^48-c_X0, 48) [8M]; no hlp (else branch) */
+
     GPOW_95_48(f_X0, ((1ull << 48) - c_X0_48) & MASK48, gw);
     SELECT(f_X0, gpp[143], c_X0_48 == 0, f_X0);
     //countM++;
-    fp_sqr(u_X1, f_X0); //countS++;              /* f_X0^2 */
-    fp_mul(u_X1, u_X0, u_X1);                  /* u_X1 = u_X0 * f_X0^2 (not counted) */
+    fp_sqr(u_X1, f_X0); //countS++;           
+    fp_mul(u_X1, u_X0, u_X1);               
 
-    /* =========================================================================
-     * EXT2_X1: sq24, hlp_X1 at j=12, do_hlp=True.
-     * inner = DLP168_normal(h0_X1)
-     * ========================================================================= */
+
     fp_copy(h0_X1, u_X1);
     fp_set_dig(hlp_X1, 1);
     for (int j = 0; j < 24; j++) {
         if (j == 12) fp_copy(hlp_X1, h0_X1);
         fp_sqr(h0_X1, h0_X1); //countS++;
     }
-    /* X1H = DLP168_normal(h0_X1): sq12, hlp_X1H at j=6 */
+  
     fp_copy(h0_X1H, h0_X1);
     fp_set_dig(hlp_X1H, 1);
     for (int j = 0; j < 12; j++) {
         if (j == 6) fp_copy(hlp_X1H, h0_X1H);
         fp_sqr(h0_X1H, h0_X1H); //countS++;
     }
-    /* X1HH = DLP180_normal(h0_X1H): sq6 */
+    
     fp_copy(h0_X1HH, h0_X1H);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_X1HH, h0_X1HH); //countS++; 
     }
@@ -1009,7 +921,6 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X1HH_H = _tmp;
-    //(uint64_t)rll_lookup(h0_X1HH, rll) >> 0;
     GPOW_180_6(h1_X1HH, (1u << 6) - c_X1HH_H, gw);
     SELECT(h1_X1HH, gpp[186], c_X1HH_H == 0, h1_X1HH);
     //countM++;
@@ -1019,10 +930,9 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_X1HH = _tmp;
-    //(uint64_t)rll_lookup(u2_X1HH, rll) >> 0;
     uint64_t c_X1HH = c_X1HH_H + ((d_X1HH - 1) & 0x3Full) * 64;
 
-    /* X1H correct: GPOW(168,12)[1M]; GPOW(174,12)[1M]; hlp_X1H *= */
+    
     GPOW_168_12(h1_X1H,   (1u << 12) - c_X1HH, gw);
     SELECT(h1_X1H,   gpp[180], c_X1HH == 0, h1_X1H);
     GPOW_174_12(hlp1_X1H, (1u << 12) - c_X1HH, gw);
@@ -1030,14 +940,14 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     fp_mul(hlp_X1H, hlp_X1H, hlp1_X1H); //countM++;
     fp_mul(u2_X1H,  h0_X1,   h1_X1H);   //countM++;
 
-    /* X1HL = DLP180_else(u2_X1H, h0=updated_hlp_X1H): no sq6 */
+    
     fp_copy(h0_X1HL, hlp_X1H);
     fp_prime_back(tmp_bn, h0_X1HL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X1HL_H = _tmp;
-    //(uint64_t)rll_lookup(h0_X1HL, rll) >> 0;
+    
     GPOW_180_6(h1_X1HL, (1u << 6) - c_X1HL_H, gw);
     SELECT(h1_X1HL, gpp[186], c_X1HL_H == 0, h1_X1HL);
     //countM++;
@@ -1047,27 +957,23 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_X1HL   = _tmp;
-    //(uint64_t)rll_lookup(u2_X1HL, rll) >> 0;
+    
     uint64_t c_X1HL   = c_X1HL_H + ((d_X1HL - 1) & 0x3Full) * 64;
     uint64_t c_X1H_24 = c_X1HH   + ((c_X1HL - 1) & 0xFFFull) * 4096;
 
-    /* f_X1=GPOW(143,2^24-c_X1H,24)[4M]; hlp1_X1=GPOW(156,...)[3M] (i+nlb1=144+12=156) */
+    
     GPOW_143_24(f_X1,    (1ull << 24) - c_X1H_24, gw);
     SELECT(f_X1,    gpp[167], c_X1H_24 == 0, f_X1);
     GPOW_156_24(hlp1_X1, (1ull << 24) - c_X1H_24, gw);
     SELECT(hlp1_X1, gpp[180], c_X1H_24 == 0, hlp1_X1);
-    fp_mul(hlp_X1, hlp_X1, hlp1_X1); //countM++;   /* hlp *= */
-    //countM++;                                       /* unconditional */
-    fp_sqr(u_X2, f_X1); //countS++;                 /* f_X1^2 */
-    fp_mul(u_X2, u_X1, u_X2);                     /* u_X2 = u_X1 * f_X1^2 */
+    fp_mul(hlp_X1, hlp_X1, hlp1_X1); //countM++; 
+    //countM++;                                    
+    fp_sqr(u_X2, f_X1); //countS++;               
+    fp_mul(u_X2, u_X1, u_X2);                    
 
-    /* =========================================================================
-     * EXT2_X2: else(hlp_X1), h0_X2=updated_hlp_X1, no sq.
-     * inner = DLP180_normal(h0_X2)
-     * ========================================================================= */
+    
     fp_copy(h0_X2, hlp_X1);
 
-    /* X2H = DLP180_normal(h0_X2): sq6 of h0_X2 */
     fp_copy(h0_X2H, h0_X2);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_X2H, h0_X2H); //countS++; 
     }
@@ -1076,30 +982,25 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X2H_H = _tmp;
-    //(uint64_t)rll_lookup(h0_X2H, rll) >> 0;
     GPOW_180_6(h1_X2H, (1u << 6) - c_X2H_H, gw);
     SELECT(h1_X2H, gpp[186], c_X2H_H == 0, h1_X2H);
     //countM++;
-    fp_mul(u2_X2H, h0_X2, h1_X2H);    /* u=h0_X2 */
+    fp_mul(u2_X2H, h0_X2, h1_X2H); 
     fp_prime_back(tmp_bn, u2_X2H);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t d_X2H = _tmp;
-    //(uint64_t)rll_lookup(u2_X2H, rll) >> 0;
     uint64_t c_X2  = c_X2H_H + ((d_X2H - 1) & 0x3Full) * 64;    /* 12-bit */
 
-    /* f_X2 = GPOW(167, 2^12-c_X2, 12) [2M]; no hlp (else branch) */
+
     GPOW_167_12(f_X2, (1u << 12) - c_X2, gw);
     SELECT(f_X2, gpp[179], c_X2 == 0, f_X2);
     //countM++;
-    fp_sqr(u_X3, f_X2); //countS++;     /* f_X2^2 */
-    fp_mul(u_X3, u_X2, u_X3);         /* u_X3 = u_X2 * f_X2^2 */
+    fp_sqr(u_X3, f_X2); //countS++;   
+    fp_mul(u_X3, u_X2, u_X3);      
 
-    /* =========================================================================
-     * EXT2_X3: sq6, inner = LEAF(186>>0) → c_X3 [HIGH-only]
-     * (b=6=w → do_hlp=False; leaf shift=0)
-     * ========================================================================= */
+   
     fp_copy(h0_X3, u_X3);
     for (int j = 0; j < 6; j++) { fp_sqr(h0_X3, h0_X3); //countS++; 
     }
@@ -1108,53 +1009,41 @@ void solve_dlp_pow2_flat(fp_t u_A, fp_t out_d,
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c_X3 = _tmp;
-    //(uint64_t)rll_lookup(h0_X3, rll) >> 0;   /* >>0 */
+    
 
-    /* f_X3 = GPOW(179, 2^6-c_X3, 6) [1M] */
+   
     GPOW_179_6(f_X3, (1u << 6) - c_X3, gw);
     SELECT(f_X3, gpp[185], c_X3 == 0, f_X3);
     //countM++;
-    fp_sqr(u_X4, f_X3); //countS++;     /* f_X3^2 */
-    fp_mul(u_X4, u_X3, u_X4);         /* u_X4 = u_X3 * f_X3^2 */
+    fp_sqr(u_X4, f_X3); //countS++;
+    fp_mul(u_X4, u_X3, u_X4);      
 
-    /* =========================================================================
-     * EXT2 BASE: i=186, lb=6=w.
-     * rll >> 0 → c1;  fll[c1 << 0] = fll[c1] → d1
-     * ========================================================================= */
+    
      fp_prime_back(tmp_bn, u_X4);
     bn_get_dig(&d, tmp_bn);
     d=d&0x7ff;
     _tmp=rlll[d];
     uint64_t c1 = _tmp;
-    //(uint64_t)rll_lookup(u_X4, rll) >> 0;
-    fp_copy(t_X3, fll[c1]);    /* fll[c1<<0] = fll[c1] */
+   
+    fp_copy(t_X3, fll[c1]);   
 
-    /* =========================================================================
-     * Unwind EXT2 chain  [5 multiplications]
-     * EXT2(i=180,b=6,a=6):   e = c + ((d-1)%2^6)*2^6
-     * EXT2(i=168,b=12,a=12): e = c + ((d-1)%2^12)*2^12
-     * EXT2(i=144,b=24,a=24): e = c + ((d-1)%2^24)*2^24
-     * EXT2(i=96, b=48,a=48): e = c + ((d-1)%2^48)*2^48
-     * ========================================================================= */
+  
     fp_mul(t_X3, f_X3, t_X3); //countM++;
-    //uint64_t e_X3 = c_X3     + ((c1        - 1) & 0x3Full)     * 64;
+ 
 
     fp_mul(t_X2, f_X2, t_X3); //countM++;
-    //uint64_t e_X2 = c_X2     + ((e_X3      - 1) & 0xFFFull)    * 4096;
+   
 
     fp_mul(t_X1, f_X1, t_X2); //countM++;
-    //uint64_t e_X1 = c_X1H_24 + ((e_X2      - 1) & 0xFFFFFFull) * (1ull << 24);
+  
 
     fp_mul(t_X0, f_X0, t_X1); //countM++;
-    //uint64_t eX1_m1 = (e_X1 - 1) & MASK48;
-    //uint120_t e_X0;
-    //e_X0.low  = (c_X0_48 | ((eX1_m1 & 0xFFFull) << 48)) & LIMB_MASK;
-    //e_X0.high = (eX1_m1 >> 12) & LIMB_MASK;
+
 
     fp_mul(t_A, f_A, t_X0); //countM++;
-    //(void)e_X0;    /* e_final not used for the field operation */
 
-    } /* end inner block */
+
+    } 
     bn_free(tmp_bn);
     fp_copy(out_d, t_A);
 
