@@ -102,45 +102,13 @@ void precomputation(fp_t g, fp_t h, fp_t hh,
     bn_free(one);
 }
 
-/* =========================================================================
- * SELECT(a0, a1, ctl) — same as Sage: returns a1 if ctl else a0
- * ========================================================================= */
+
 static void SELECT(fp_t a0, fp_t a1, bool ctl, fp_t out)
 {
     if (ctl) fp_copy(out, a1);
     else     fp_copy(out, a0);
 }
 
-/* =========================================================================
- * GPOW helper functions — one per (i, elen) pair.
- *
- * General rule (w=2, mask=0x3):
- *   e &= (1<<elen)-1
- *   ri = i%2;  i_row = i//2
- *   if ri: e <<= ri; elen += ri
- *   t = gw[i_row][e & 0x3]
- *   while elen > 2: e >>= 2; i_row++; t *= gw[i_row][e & 0x3]; M++
- *
- * Instances (from Sage tree):
- *
- *   GPOW(33, *, 2):  ri=1 i_row=16  e<<=1 eff=3  rows=2  M=1  gw[16],gw[17]
- *   GPOW(33, *, 1):  ri=1 i_row=16  e<<=1 eff=2  rows=1  M=0  gw[16]
- *   GPOW(28, *, 4):  ri=0 i_row=14  eff=4  rows=2  M=1  gw[14],gw[15]
- *   GPOW(32, *, 2):  ri=0 i_row=16  eff=2  rows=1  M=0  gw[16]
- *   GPOW(34, *, 2):  ri=0 i_row=17  eff=2  rows=1  M=0  gw[17]
- *   GPOW(34, *, 1):  ri=0 i_row=17  eff=1  rows=1  M=0  gw[17]
- *   GPOW(19, *, 9):  ri=1 i_row=9   e<<=1 eff=10 rows=5  M=4  gw[9..13]
- *   GPOW(0,  *, 17): ri=0 i_row=0   eff=17 rows=9  M=8  gw[0..8]
- *   GPOW(10, *, 18): ri=0 i_row=5   eff=18 rows=9  M=8  gw[5..13]
- *   GPOW(17, *, 9):  ri=1 i_row=8   e<<=1 eff=10 rows=5  M=4  gw[8..12]
- *   GPOW(26, *, 5):  ri=0 i_row=13  eff=5  rows=3  M=2  gw[13,14,15]
- *   GPOW(31, *, 2):  ri=1 i_row=15  e<<=1 eff=3  rows=2  M=1  gw[15],gw[16]
- * ========================================================================= */
-
-/*
- * GPOW(33, e, 2): ri=1, e<<=1, eff=3, rows=2
- *   gw[16][e & 0x3]; e>>=2; gw[17][e & 0x3]  ->  1 M
- */
 static void GPOW_i33_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 2) - 1;
@@ -149,10 +117,7 @@ static void GPOW_i33_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[17][e & 0x3]); //countM++;
 }
 
-/*
- * GPOW(33, e, 1): ri=1, e<<=1, eff=2, rows=1
- *   gw[16][e & 0x3]  ->  0 M
- */
+
 static void GPOW_i33_e1(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 1) - 1;
@@ -160,10 +125,7 @@ static void GPOW_i33_e1(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_copy(t, gw[16][e & 0x3]);
 }
 
-/*
- * GPOW(28, e, 4): ri=0, eff=4, rows=2
- *   gw[14][e & 0x3]; e>>=2; gw[15][e & 0x3]  ->  1 M
- */
+
 static void GPOW_i28_e4(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 4) - 1;
@@ -171,40 +133,28 @@ static void GPOW_i28_e4(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[15][e & 0x3]); //countM++;
 }
 
-/*
- * GPOW(32, e, 2): ri=0, eff=2, rows=1
- *   gw[16][e & 0x3]  ->  0 M
- */
+
 static void GPOW_i32_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 2) - 1;
     fp_copy(t, gw[16][e & 0x3]);
 }
 
-/*
- * GPOW(34, e, 2): ri=0, eff=2, rows=1
- *   gw[17][e & 0x3]  ->  0 M
- */
+
 static void GPOW_i34_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 2) - 1;
     fp_copy(t, gw[17][e & 0x3]);
 }
 
-/*
- * GPOW(34, e, 1): ri=0, eff=1, rows=1
- *   gw[17][e & 0x3]  ->  0 M
- */
+
 static void GPOW_i34_e1(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 1) - 1;
     fp_copy(t, gw[17][e & 0x3]);
 }
 
-/*
- * GPOW(19, e, 9): ri=1, e<<=1, eff=10, rows=5
- *   gw[9..13]  ->  4 M
- */
+
 static void GPOW_i19_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 9) - 1;
@@ -219,10 +169,7 @@ e >>= 2;
     fp_mul(t, t, gw[13][e & 0x3]); //countM++;
 }
 
-/*
- * GPOW(0, e, 17): ri=0, eff=17, rows=9
- *   gw[0..8]  ->  8 M
- */
+
 static void GPOW_i0_e17(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 17) - 1;
@@ -244,10 +191,7 @@ e >>= 2;
     fp_mul(t, t, gw[8][e & 0x3]); //countM++;
 }
 
-/*
- * GPOW(10, e, 18): ri=0, eff=18, rows=9
- *   gw[5..13]  ->  8 M
- */
+
 static void GPOW_i10_e18(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 18) - 1;
@@ -269,10 +213,7 @@ e >>= 2;
     fp_mul(t, t, gw[13][e & 0x3]); //countM++;
 }
 
-/*
- * GPOW(17, e, 9): ri=1, e<<=1, eff=10, rows=5
- *   gw[8..12]  ->  4 M
- */
+
 static void GPOW_i17_e9(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 9) - 1;
@@ -287,10 +228,7 @@ e >>= 2;
     fp_mul(t, t, gw[12][e & 0x3]); //countM++;
 }
 
-/*
- * GPOW(26, e, 5): ri=0, eff=5, rows=3
- *   gw[13..15]  ->  2 M
- */
+
 static void GPOW_i26_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 5) - 1;
@@ -300,10 +238,7 @@ e >>= 2;
     fp_mul(t, t, gw[15][e & 0x3]); //countM++;
 }
 
-/*
- * GPOW(31, e, 2): ri=1, e<<=1, eff=3, rows=2
- *   gw[15][e & 0x3]; e>>=2; gw[16][e & 0x3]  ->  1 M
- */
+
 static void GPOW_i31_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 2) - 1;
@@ -312,42 +247,37 @@ static void GPOW_i31_e2(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[16][e & 0x3]); //countM++;
 }
 
-/* =========================================================================
- * DLPpow2ext — direct translation of sqrt_n37_w2.sage DLPpow2ext.
- * The DLP@28 block is inlined three times (for h0_PA, u2_PA, h0_X0)
- * exactly as in the Sage code (no helper function, no recursion, no stack).
- * out_t receives t_A on return.
- * ========================================================================= */
+
 void DLPpow2ext(fp_t u_A, fp_t out_t,
                 fp_t gw[nw][we], int rlll[4], fp_t rll[we], fp_t fll[we], fp_t gpp[n])
 {
     const uint64_t one_k = 1;
 
-    /* ── Declare all fp_t temporaries ─────────────────────────────────── */
+    
 
-    /* TOP squaring chain */
+    
     fp_t h0_A, hlp_A;
 
-    /* PA block squaring chain */
+    
     fp_t h0_PA;
 
-    /* DLP@28 inlining #1 — for c_PA (input = h0_PA) */
+    
     fp_t dlp1_h0, dlp1_h0_HH, dlp1_h1_HH, dlp1_u2_HH;
     fp_t dlp1_h1_H, dlp1_u2_H;
     fp_t dlp1_hlp_HL, dlp1_h0_HL, dlp1_h1_HL, dlp1_hlp1_HL, dlp1_u2_HL;
     fp_t dlp1_h0_HLL, dlp1_h1_HLL, dlp1_u2_HLL;
 
-    /* PA correction and DLP@28 inlining #2 — for d_PA (input = u2_PA) */
+    
     fp_t h1_PA, u2_PA;
     fp_t dlp2_h0, dlp2_h0_HH, dlp2_h1_HH, dlp2_u2_HH;
     fp_t dlp2_h1_H, dlp2_u2_H;
     fp_t dlp2_hlp_HL, dlp2_h0_HL, dlp2_h1_HL, dlp2_hlp1_HL, dlp2_u2_HL;
     fp_t dlp2_h0_HLL, dlp2_h1_HLL, dlp2_u2_HLL;
 
-    /* f_A, hlp_A update */
+    
     fp_t f_A, hlp1_A, f_A_sq;
 
-    /* EXT2 depth 0 (DLP@28 inlining #3 — for c_X0, input = h0_X0) */
+    
     fp_t u_X0, h0_X0;
     fp_t dlp3_h0, dlp3_h0_HH, dlp3_h1_HH, dlp3_u2_HH;
     fp_t dlp3_h1_H, dlp3_u2_H;
@@ -355,28 +285,28 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_t dlp3_h0_HLL, dlp3_h1_HLL, dlp3_u2_HLL;
     fp_t f_X0, f_X0_sq;
 
-    /* EXT2 depth 1 — DLP@32 for c_X1 */
+    
     fp_t u_X1, h0_X1;
     fp_t hlp_X1P, h0_X1P;
     fp_t h1_X1P, hlp1_X1P, u2_X1P;
     fp_t h0_X1PL, h1_X1PL, u2_X1PL;
     fp_t f_X1, f_X1_sq;
 
-    /* EXT2 depth 2 */
+    
     fp_t u_X2, hlp_X2, h0_X2;
     fp_t f_X2, hlp1_X2, f_X2_sq;
 
-    /* EXT2 depth 3 */
+    
     fp_t u_X3, h0_X3;
     fp_t f_X3, f_X3_sq;
 
-    /* EXT2 BASE */
+    
     fp_t u_X4, d1_X4;
 
-    /* Unwind */
+    
     fp_t t_X3, t_X2, t_X1, t_X0, t_A;
 
-    /* ── Allocate ──────────────────────────────────────────────────────── */
+    
     fp_null(h0_A);          fp_new(h0_A);
     fp_null(hlp_A);         fp_new(hlp_A);
     fp_null(h0_PA);         fp_new(h0_PA);
@@ -475,18 +405,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
 
     int _ii, _tmp;
 
-    /* =========================================================================
-     * TOP: lb=37, a=18, b=19, nlb1=10, do_hlp=True
-     * Square 19; capture hlp_A at j=10.
-     *
-     * Sage:
-     *   hlp_A = None
-     *   h0_A  = u_A
-     *   for _j in range(19):
-     *       if _j == 10: hlp_A = h0_A
-     *       h0_A *= h0_A
-     *   cost["S"] += 19
-     * ========================================================================= */
+    
     fp_copy(h0_A, u_A);
     for (int _j = 0; _j < 19; _j++) {
         if (_j == 10) fp_copy(hlp_A, h0_A);
@@ -494,15 +413,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     }
     //countS += 19;
 
-    /* =========================================================================
-     * PA block: DLPpow2(h0_A, i=19)
-     * lb=18, a=9, b=9, do_hlp=False  -> square 9, hlp_PA=None
-     *
-     * Sage:
-     *   h0_PA = h0_A
-     *   for _j in range(9): h0_PA *= h0_PA
-     *   cost["S"] += 9
-     * ========================================================================= */
+    
     fp_copy(h0_PA, h0_A);
     for (int _j = 0; _j < 9; _j++) fp_sqr(h0_PA, h0_PA);
     //countS += 9;
@@ -511,11 +422,11 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     /* square 5 */
     for (int _j = 0; _j < 5; _j++) fp_sqr(dlp1_h0, dlp1_h0);
     //countS += 5;
-    /* H-child: square 2 */
+   
     fp_copy(dlp1_h0_HH, dlp1_h0);
     for (int _j = 0; _j < 2; _j++) fp_sqr(dlp1_h0_HH, dlp1_h0_HH);
     //countS += 2;
-    /* leaf-H: i=35, lb=2, shift=0 */
+    
 	bn_t tmp_bn;
 	bn_null(tmp_bn);bn_new(tmp_bn);
 	
@@ -523,44 +434,38 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp1_h0_HH) == RLC_EQ) _tmp = _ii;
-    uint64_t dlp1_c_HH = (uint64_t)_tmp;           /* >> 0 */
+
+    uint64_t dlp1_c_HH = (uint64_t)_tmp;           
     GPOW_i33_e2(dlp1_h1_HH, (one_k << 2) - dlp1_c_HH, gw);
     SELECT(dlp1_h1_HH, gpp[35], dlp1_c_HH == 0, dlp1_h1_HH);
     //countM++;
     fp_mul(dlp1_u2_HH, dlp1_h0, dlp1_h1_HH);
-    /* leaf-L: i=35, lb=2, shift=0 */
+    
     fp_prime_back(tmp_bn, dlp1_u2_HH);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp1_u2_HH) == RLC_EQ) _tmp = _ii;
-    uint64_t dlp1_d_HH = (uint64_t)_tmp;           /* >> 0 */
+
+    uint64_t dlp1_d_HH = (uint64_t)_tmp;        
     uint64_t dlp1_c_H  = dlp1_c_HH + ((dlp1_d_HH - 1) % 4) * 4;
-    /* correct i=28, a=4 */
+    
     GPOW_i28_e4(dlp1_h1_H, (one_k << 4) - dlp1_c_H, gw);
     SELECT(dlp1_h1_H, gpp[32], dlp1_c_H == 0, dlp1_h1_H);
     //countM++;
     fp_mul(dlp1_u2_H, h0_PA, dlp1_h1_H);
-    /* L-child: square 3, capture hlp at j=2 */
+    
     fp_copy(dlp1_h0_HL, dlp1_u2_H);
     for (int _j = 0; _j < 3; _j++) {
         if (_j == 2) fp_copy(dlp1_hlp_HL, dlp1_h0_HL);
         fp_sqr(dlp1_h0_HL, dlp1_h0_HL);
     }
     //countS += 3;
-    /* leaf-H: i=35, lb=2, shift=0 */
+    
     fp_prime_back(tmp_bn, dlp1_h0_HL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp1_h0_HL) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp1_c_HL = (uint64_t)_tmp;           /* >> 0 */
     GPOW_i32_e2(dlp1_h1_HL,   (one_k << 2) - dlp1_c_HL, gw);
     SELECT(dlp1_h1_HL,   gpp[34], dlp1_c_HL == 0, dlp1_h1_HL);
@@ -569,52 +474,37 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     fp_mul(dlp1_hlp_HL, dlp1_hlp_HL, dlp1_hlp1_HL); //countM++;
     //countM++;
     fp_mul(dlp1_u2_HL, dlp1_u2_H, dlp1_h1_HL);
-    /* LL-grandchild: helper consumed */
+    
     fp_copy(dlp1_h0_HLL, dlp1_hlp_HL);
-    /* leaf-H: i=36, lb=1, shift=1 */
+    
     fp_prime_back(tmp_bn, dlp1_h0_HLL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp1_h0_HLL) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp1_c_HLL = (uint64_t)_tmp >> 1;
     GPOW_i34_e1(dlp1_h1_HLL, (one_k << 1) - dlp1_c_HLL, gw);
     SELECT(dlp1_h1_HLL, gpp[35], dlp1_c_HLL == 0, dlp1_h1_HLL);
     //countM++;
     fp_mul(dlp1_u2_HLL, dlp1_u2_HL, dlp1_h1_HLL);
-    /* leaf-L: i=35, lb=2, shift=0 */
+    
     fp_prime_back(tmp_bn, dlp1_u2_HLL);
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp1_u2_HLL) == RLC_EQ) _tmp = _ii;
-    uint64_t dlp1_d_HLL = (uint64_t)_tmp;          /* >> 0 */
+
+    uint64_t dlp1_d_HLL = (uint64_t)_tmp;          
     uint64_t dlp1_d_HL  = dlp1_c_HLL + ((dlp1_d_HLL - 1) % 4) * 2;
     uint64_t dlp1_c_L   = dlp1_c_HL  + ((dlp1_d_HL  - 1) % 8) * 4;
     uint64_t c_PA       = dlp1_c_H   + ((dlp1_c_L   - 1) % 32) * 16;
 
-    /* =========================================================================
-     * PA correction: GPOW(19, 2^9-c_PA, 9)  [do_hlp=False, no hlp update]
-     *
-     * Sage:
-     *   h1_PA = GPOW(19, (1<<9)-c_PA, 9)
-     *   h1_PA = SELECT(h1_PA, gpp[28], c_PA==0)
-     *   cost["M"] += 1
-     *   u2_PA = h0_A * h1_PA
-     * ========================================================================= */
+    
     GPOW_i19_e9(h1_PA, (one_k << 9) - c_PA, gw);
     SELECT(h1_PA, gpp[28], c_PA == 0, h1_PA);
     //countM++;
     fp_mul(u2_PA, h0_A, h1_PA);
 
-    /* =========================================================================
-     * DLP@28 inlining #2: d_PA = dlp28(u2_PA)
-     * (Identical structure to #1, input = u2_PA, prefixed dlp2_)
-     * ========================================================================= */
+    
     fp_copy(dlp2_h0, u2_PA);
     for (int _j = 0; _j < 5; _j++) fp_sqr(dlp2_h0, dlp2_h0);
     //countS += 5;
@@ -625,9 +515,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp2_h0_HH) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp2_c_HH = (uint64_t)_tmp;
     GPOW_i33_e2(dlp2_h1_HH, (one_k << 2) - dlp2_c_HH, gw);
     SELECT(dlp2_h1_HH, gpp[35], dlp2_c_HH == 0, dlp2_h1_HH);
@@ -637,9 +525,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp2_u2_HH) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp2_d_HH = (uint64_t)_tmp;
     uint64_t dlp2_c_H  = dlp2_c_HH + ((dlp2_d_HH - 1) % 4) * 4;
     GPOW_i28_e4(dlp2_h1_H, (one_k << 4) - dlp2_c_H, gw);
@@ -656,9 +542,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp2_h0_HL) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp2_c_HL = (uint64_t)_tmp;
     GPOW_i32_e2(dlp2_h1_HL,   (one_k << 2) - dlp2_c_HL, gw);
     SELECT(dlp2_h1_HL,   gpp[34], dlp2_c_HL == 0, dlp2_h1_HL);
@@ -672,9 +556,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp2_h0_HLL) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp2_c_HLL = (uint64_t)_tmp >> 1;
     GPOW_i34_e1(dlp2_h1_HLL, (one_k << 1) - dlp2_c_HLL, gw);
     SELECT(dlp2_h1_HLL, gpp[35], dlp2_c_HLL == 0, dlp2_h1_HLL);
@@ -684,46 +566,25 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp2_u2_HLL) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp2_d_HLL = (uint64_t)_tmp;
     uint64_t dlp2_d_HL  = dlp2_c_HLL + ((dlp2_d_HLL - 1) % 4) * 2;
     uint64_t dlp2_c_L   = dlp2_c_HL  + ((dlp2_d_HL  - 1) % 8) * 4;
     uint64_t d_PA       = dlp2_c_H   + ((dlp2_c_L   - 1) % 32) * 16;
 
-    /* Combine -> c_A is the 18-bit DLP result */
+   
     uint64_t c_A = c_PA + ((d_PA - 1) % 512) * 512;
 
-    /* =========================================================================
-     * f_A + update hlp_A (BEFORE using hlp_A as EXT2 depth-0 helper)
-     *
-     * Sage:
-     *   f_A    = GPOW(0,  ((2^18-c_A+1)>>1), 17)   [8 M]
-     *   f_A    = SELECT(f_A, gpp[17], c_A==0)
-     *   hlp1_A = GPOW(10,  2^18-c_A, 18)            [8 M]
-     *   hlp1_A = SELECT(hlp1_A, gpp[28], c_A==0)
-     *   hlp_A  = hlp_A * hlp1_A                     <- update hlp_A
-     *   cost["M"] += 1;  cost["M"] += 1
-     *   cost["S"] += 1                              # f_A^2 inside u_X0
-     * ========================================================================= */
+    
     GPOW_i0_e17(f_A,    ((one_k << 18) - c_A + 1) >> 1, gw);
     SELECT(f_A,    gpp[17], c_A == 0, f_A);
     GPOW_i10_e18(hlp1_A, (one_k << 18) - c_A, gw);
     SELECT(hlp1_A, gpp[28], c_A == 0, hlp1_A);
     fp_mul(hlp_A, hlp_A, hlp1_A); //countM++;
     //countM++;
-    //countS++;   /* f_A^2 inside u_X0 */
+    //countS++;   
 
-    /* =========================================================================
-     * EXT2 depth 0: i_X0=18, lb=19, a=9, b=10, do_hlp=False
-     * helper=updated_hlp_A (consumed) -> h0_X0=hlp_A, hlp_X0=None, no squarings
-     * c_X0 = DLP@28(h0_X0)
-     *
-     * Sage:
-     *   u_X0  = u_A * f_A^2
-     *   h0_X0 = hlp_A               # updated hlp_A consumed
-     * ========================================================================= */
+    
     fp_sqr(f_A_sq, f_A);
     fp_mul(u_X0, u_A, f_A_sq);
     fp_copy(h0_X0, hlp_A); 
@@ -774,9 +635,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp3_h0_HLL) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp3_c_HLL = (uint64_t)_tmp >> 1;
     GPOW_i34_e1(dlp3_h1_HLL, (one_k << 1) - dlp3_c_HLL, gw);
     SELECT(dlp3_h1_HLL, gpp[35], dlp3_c_HLL == 0, dlp3_h1_HLL);
@@ -786,22 +645,13 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     bn_get_dig(&d, tmp_bn);
     d=d&0x3;
     _tmp=rlll[d];
-//    _tmp = 0;
-//    for (_ii = 0; _ii < we; _ii++)
-//        if (fp_cmp(rll[_ii], dlp3_u2_HLL) == RLC_EQ) _tmp = _ii;
+
     uint64_t dlp3_d_HLL = (uint64_t)_tmp;
     uint64_t dlp3_d_HL  = dlp3_c_HLL + ((dlp3_d_HLL - 1) % 4) * 2;
     uint64_t dlp3_c_L   = dlp3_c_HL  + ((dlp3_d_HL  - 1) % 8) * 4;
     uint64_t c_X0       = dlp3_c_H   + ((dlp3_c_L   - 1) % 32) * 16;
 
-    /* f_X0: no hlp (hlp_X0=None)
-     *
-     * Sage:
-     *   f_X0 = GPOW(17, 2^9-c_X0, 9)         [4 M]
-     *   f_X0 = SELECT(f_X0, gpp[26], c_X0==0)
-     *   cost["M"] += 1
-     *   cost["S"] += 1                        # f_X0^2 inside u_X1
-     */
+    
     GPOW_i17_e9(f_X0, (one_k << 9) - c_X0, gw);
     SELECT(f_X0, gpp[26], c_X0 == 0, f_X0);
     //countM++;
@@ -885,7 +735,7 @@ void DLPpow2ext(fp_t u_A, fp_t out_t,
     d=d&0x3;
     _tmp=rlll[d];
 
-    uint64_t c_X3 = (uint64_t)_tmp >> 1;           /* 1-bit result */
+    uint64_t c_X3 = (uint64_t)_tmp >> 1;           
     GPOW_i33_e1(f_X3, (one_k << 1) - c_X3, gw);
     SELECT(f_X3, gpp[34], c_X3 == 0, f_X3);
    
