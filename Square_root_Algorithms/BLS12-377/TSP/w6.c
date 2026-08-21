@@ -282,7 +282,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     int _e1_PAH = _tmp;
     
     uint64_t e_PAH = ((uint64_t)_e1_PAH - 1) & 63;
-    uint64_t c_PA  = c_PAH + (e_PAH << 5);          /* 11-bit */
+    uint64_t c_PA  = c_PAH + (e_PAH << 5);          
 
     
     GPOW_i23_e11(h1_PA,   (one_k << 11) - c_PA, gw);
@@ -293,7 +293,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     //countM++;
     fp_mul(u2_PA, h0_A, h1_PA);
 
-    fp_copy(h0_PAL, hlp_PA);   /* updated hlp_PA consumed */
+    fp_copy(h0_PAL, hlp_PA);   
 
     
     fp_prime_back(tmp_bn, h0_PAL);
