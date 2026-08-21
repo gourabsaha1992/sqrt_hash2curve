@@ -138,7 +138,7 @@ static void GPOW_i22_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[5][e & wm]); //countM++;
 }
 
-/* GPOW_i23_e11: ri=5, row=3, e<<=5, adj=16, rows=3, 2 muls */
+
 static void GPOW_i23_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 11) - 1; e <<= 5;
@@ -149,7 +149,7 @@ static void GPOW_i23_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[5][e & wm]); //countM++;
 }
 
-/* GPOW_i29_e11: ri=5, row=4, e<<=5, adj=16, rows=3, 2 muls */
+
 static void GPOW_i29_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 11) - 1; e <<= 5;
@@ -160,7 +160,7 @@ static void GPOW_i29_e11(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[6][e & wm]); //countM++;
 }
 
-/* GPOW_i33_e6: ri=3, row=5, e<<=3, adj=9, rows=2, 1 mul */
+
 static void GPOW_i33_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 6) - 1; e <<= 3;
@@ -169,7 +169,7 @@ static void GPOW_i33_e6(fp_t t, uint64_t e, fp_t gw[nw][we])
     fp_mul(t, t, gw[6][e & wm]); //countM++;
 }
 
-/* GPOW_i35_e5: ri=5, row=5, e<<=5, adj=10, rows=2, 1 mul */
+
 static void GPOW_i35_e5(fp_t t, uint64_t e, fp_t gw[nw][we])
 {
     e &= ((uint64_t)1 << 5) - 1; e <<= 5;
@@ -261,7 +261,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     bn_t tmp_bn;
     int _tmp;
     dig_t d;
-    /* PAH.H leaf: i=41, lb=5, >> 1 */
+    
     fp_prime_back(tmp_bn, h0_PAH);
     bn_get_dig(&d, tmp_bn);
     d=d&0xfff;
@@ -295,7 +295,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
 
     fp_copy(h0_PAL, hlp_PA);   /* updated hlp_PA consumed */
 
-    /* PAL.H leaf: i=40, lb=6, >> 0 */
+    
     fp_prime_back(tmp_bn, h0_PAL);
     bn_get_dig(&d, tmp_bn);
     d=d&0xfff;
@@ -354,7 +354,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     //countM++;
     fp_mul(u2_XH, h0_X, h1_XH);
 
-    /* XH.L leaf: i=40, lb=6, >> 0 */
+    
     fp_prime_back(tmp_bn, u2_XH);
     bn_get_dig(&d, tmp_bn);
     d=d&0xfff;
@@ -376,13 +376,13 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     for (int _j = 0; _j < 6; _j++) fp_sqr(h0_XL, h0_XL);
     //countS += 6;
 
-    /* XL.H leaf: i=40, lb=6, >> 0 */
+    
     fp_prime_back(tmp_bn, h0_XL);
     bn_get_dig(&d, tmp_bn);
     d=d&0xfff;
     _tmp=rlll[d];
     uint64_t c_XL = _tmp;
-    //(uint64_t)rll_lookup(h0_XL, rll);   /* >> 0 */
+   
 
     GPOW_i33_e6(f_XL, (one_k << 6) - c_XL, gw);
     SELECT(f_XL, gpp[39], c_XL == 0, f_XL);
@@ -391,7 +391,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     fp_sqr(f_XL_sq, f_XL); //countS++;
     fp_mul(u2_XL, f_XL_sq, h1_X);
 
-    /* XL.L leaf: i=40, lb=6, >> 0 */
+   
     fp_prime_back(tmp_bn, u2_XL);
     bn_get_dig(&d, tmp_bn);
     d=d&0xfff;
