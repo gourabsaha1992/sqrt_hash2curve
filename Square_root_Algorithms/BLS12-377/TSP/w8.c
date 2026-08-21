@@ -64,12 +64,7 @@ static inline unsigned long long get_Clks(void)
     RDTSC_clk_max    = RDTSC_clk[REPEAT - 1]; \
 }
 
-/* =========================================================================
- * precomputation
- * Note: rll and fhl are built differently from the standard rll/fll tables.
- * rll is a lookup-by-value map (here implemented as a scanned array).
- * fhl[v] = h1^(-(v>>1)) built per the original Sage construction.
- * ========================================================================= */
+
 void precomputation(fp_t g, fp_t h, fp_t h1,
                     fp_t gw[nw][we], fp_t rll[we], fp_t fhl[we], fp_t gpp[n])
 {
@@ -314,7 +309,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     fp_mul(u2_PA, h0_A, h1_PA);
 
     
-    fp_copy(h0_PAL, hlp_PA);   /* updated hlp_PA consumed */
+    fp_copy(h0_PAL, hlp_PA);   
 
     fp_prime_back(tmp_bn, h0_PAL);
     bn_get_dig(&d, tmp_bn);
@@ -341,7 +336,7 @@ void solve_dlp_pow2_flat(fp_t u, fp_t out_d,
     fp_mul(d_PA, d_PA, f_PAL); //countM++;
 
     uint64_t e_PAL  = ((uint64_t)_e1_PAL - 1) & 63;
-    uint64_t e1_PA  = c_PAL + (e_PAL << 6);         /* 12-bit */
+    uint64_t e1_PA  = c_PAL + (e_PAL << 6);         
 
     
     uint64_t e_PA_adj = (e1_PA - 1) & ((one_k << 12) - 1);
